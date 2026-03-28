@@ -1,0 +1,1146 @@
+.accounts-page {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+
+  --radius-sm: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  --bg-card: #18181b;
+  --bg-hover: #27272a;
+  --bg-elevated: #3f3f46;
+
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+
+  --border: #27272a;
+  --border-hover: #3f3f46;
+  --border-strong: #52525b;
+
+  --primary: #8b5cf6;
+  --primary-light: #a78bfa;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #f87171;
+
+  --color-app: #09090b;
+  --color-border: var(--border);
+  --color-text-secondary: var(--text-secondary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--danger);
+}
+
+:root[data-theme='light'] .accounts-page {
+  --bg-card: #ffffff;
+  --bg-hover: #f4f5f7;
+  --bg-elevated: #eceff3;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+
+  --border: #e5e7eb;
+  --border-hover: #d1d5db;
+  --border-strong: #9ca3af;
+
+  --primary: #e85d4a;
+  --primary-light: #f97316;
+
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  --color-app: #ffffff;
+}
+
+:root[data-theme='solarized'] .accounts-page {
+  --bg-card: #fffdf5;
+  --bg-hover: #f5efde;
+  --bg-elevated: #ece3cd;
+
+  --text-primary: #1c1917;
+  --text-secondary: #3f3f46;
+  --text-muted: #57534e;
+
+  --border: #d6d3d1;
+  --border-hover: #c4bca9;
+  --border-strong: #a8a29e;
+
+  --primary: #d94f3d;
+  --primary-light: #e85d04;
+
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #dc2626;
+
+  --color-app: #fdf6e3;
+}
+
+:root[data-theme='light'] .accounts-page .metric-success {
+  --metric-color: #14532d;
+  --metric-border: #86efac;
+  --metric-bg: #dcfce7;
+}
+
+:root[data-theme='light'] .accounts-page .metric-warning {
+  --metric-color: #92400e;
+  --metric-border: #fcd34d;
+  --metric-bg: #fef3c7;
+}
+
+:root[data-theme='light'] .accounts-page .metric-danger {
+  --metric-color: #991b1b;
+  --metric-border: #fca5a5;
+  --metric-bg: #fee2e2;
+}
+
+:root[data-theme='light'] .accounts-page .metric-disabled-note {
+  --metric-color: #525252;
+  --metric-border: #d4d4d8;
+  --metric-bg: #f4f4f5;
+}
+
+:root[data-theme='solarized'] .accounts-page .metric-success {
+  --metric-color: #14532d;
+  --metric-border: #86efac;
+  --metric-bg: #e7f6ea;
+}
+
+:root[data-theme='solarized'] .accounts-page .metric-warning {
+  --metric-color: #92400e;
+  --metric-border: #fcd34d;
+  --metric-bg: #fff2d6;
+}
+
+:root[data-theme='solarized'] .accounts-page .metric-danger {
+  --metric-color: #991b1b;
+  --metric-border: #fca5a5;
+  --metric-bg: #ffe6e0;
+}
+
+:root[data-theme='solarized'] .accounts-page .metric-disabled-note {
+  --metric-color: #57534e;
+  --metric-border: #d6d3d1;
+  --metric-bg: #f1ebdc;
+}
+
+:root[data-theme='light'] .accounts-page .metric-value,
+:root[data-theme='solarized'] .accounts-page .metric-value {
+  color: currentColor;
+}
+
+.accounts-page .selection-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.accounts-page .selection-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.accounts-page .selection-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.accounts-page .accounts-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.accounts-page .toolbar-top-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.accounts-page .provider-tabs {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--bg-card);
+}
+
+.accounts-page .provider-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 4.75rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: calc(var(--radius-lg, 0.75rem) - 0.25rem);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0 0.75rem;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.accounts-page .provider-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.accounts-page .provider-tab.provider-tab-active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.accounts-page .provider-tab.provider-tab-active:hover {
+  background: color-mix(in srgb, var(--primary) 88%, #000000);
+}
+
+.accounts-page .toolbar-bottom-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.accounts-page .accounts-search-icon {
+  color: var(--text-muted);
+}
+
+.accounts-page .accounts-search-input {
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.accounts-page .accounts-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.accounts-page .accounts-search-input:focus {
+  border-color: color-mix(in srgb, var(--primary) 56%, var(--border-hover));
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 56%, transparent);
+}
+
+.accounts-page .selection-btn.selection-btn-active {
+  border-color: color-mix(in srgb, var(--primary) 56%, var(--border-hover));
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: color-mix(in srgb, var(--primary-light) 80%, white);
+}
+
+.accounts-page .import-btn {
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border-hover));
+  color: color-mix(in srgb, var(--primary-light) 82%, var(--text-primary));
+}
+
+.accounts-page .import-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border-strong));
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: color-mix(in srgb, var(--primary-light) 90%, white);
+}
+
+.accounts-page .bulk-action-btn {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--border-hover));
+  color: color-mix(in srgb, var(--success) 84%, var(--text-primary));
+}
+
+.accounts-page .bulk-action-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--success) 55%, var(--border-strong));
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: color-mix(in srgb, var(--success) 92%, white);
+}
+
+.accounts-page .bulk-delete-btn {
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--border-hover));
+  color: color-mix(in srgb, var(--danger) 86%, var(--text-primary));
+}
+
+.accounts-page .bulk-delete-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--border-strong));
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: color-mix(in srgb, var(--danger) 94%, white);
+}
+
+.accounts-page .refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .accounts-page .toolbar-top-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .accounts-page .toolbar-bottom-actions {
+    justify-content: flex-end;
+  }
+}
+
+.accounts-page .view-toggle {
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 0.75rem);
+}
+
+.accounts-page .view-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 4.75rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: calc(var(--radius-lg, 0.75rem) - 0.25rem);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.accounts-page .view-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.accounts-page .view-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.accounts-page .view-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.accounts-page .view-button.is-active {
+  background: var(--primary);
+  color: white;
+}
+
+.accounts-page .view-button:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 2px;
+}
+
+.accounts-page .empty-state {
+  border: 1px dashed var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-app) 84%, transparent);
+}
+
+.accounts-page .auth-session {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.625rem;
+  background: color-mix(in srgb, var(--color-app) 82%, transparent);
+}
+
+.accounts-page .session-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 1.25rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.accounts-page .session-pill.status-success {
+  border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: color-mix(in srgb, var(--color-success) 72%, white);
+}
+
+.accounts-page .session-pill.status-error {
+  border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  color: color-mix(in srgb, var(--color-error) 74%, white);
+}
+
+.accounts-page .session-pill.status-pending {
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 78%, white);
+}
+
+.accounts-page .account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.accounts-page .account-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  animation: cardFadeIn 0.3s ease;
+}
+
+.accounts-page .account-card:has(.select-toggle input:checked),
+.accounts-page .account-card.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border-strong));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 24%, transparent), 0 4px 6px rgb(0 0 0 / 0.08);
+}
+
+.accounts-page .account-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgb(0 0 0 / 0.1);
+}
+
+.accounts-page .account-card.is-disabled {
+  opacity: 0.84;
+}
+
+.accounts-page .card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.accounts-page .provider-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.accounts-page .provider-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: white;
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.1);
+  flex-shrink: 0;
+}
+
+.accounts-page .provider-icon-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.accounts-page .provider-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.accounts-page .provider-label {
+  margin: 0;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.accounts-page .account-email {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-page .select-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-hover);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.accounts-page .select-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.accounts-page .select-toggle:has(input:checked) {
+  border-color: color-mix(in srgb, var(--primary) 48%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--text-primary);
+}
+
+.accounts-page .alert {
+  --alert-color: var(--text-secondary);
+  --alert-border: color-mix(in srgb, var(--border-hover) 70%, transparent);
+  --alert-bg: color-mix(in srgb, var(--bg-hover) 70%, transparent);
+
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  border: 1px solid var(--alert-border);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alert-color);
+  background: var(--alert-bg);
+  animation: alertSlideIn 0.3s ease;
+}
+
+.accounts-page .alert-error {
+  --alert-color: color-mix(in srgb, var(--danger) 78%, white);
+  --alert-border: color-mix(in srgb, var(--danger) 30%, transparent);
+  --alert-bg: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.accounts-page .alert-warning {
+  --alert-color: color-mix(in srgb, var(--warning) 78%, white);
+  --alert-border: color-mix(in srgb, var(--warning) 30%, transparent);
+  --alert-bg: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.accounts-page .alert-empty {
+  --alert-color: var(--text-secondary);
+  --alert-border: color-mix(in srgb, var(--border) 40%, transparent);
+  --alert-bg: color-mix(in srgb, var(--bg-hover) 32%, transparent);
+}
+
+.accounts-page .metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.accounts-page .metric-bar {
+  --metric-color: var(--text-primary);
+  --metric-border: color-mix(in srgb, var(--border-hover) 85%, transparent);
+  --metric-bg: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-height: 27px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--metric-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--metric-color);
+  background: var(--metric-bg);
+}
+
+.accounts-page .metric-top,
+.accounts-page .metric-left,
+.accounts-page .metric-right,
+.accounts-page .metric-reset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.accounts-page .metric-top {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.accounts-page .metric-right {
+  flex-shrink: 0;
+  white-space: nowrap;
+  justify-content: flex-end;
+  align-self: flex-start;
+  margin-left: auto;
+}
+
+.accounts-page .metric-success {
+  --metric-color: color-mix(in srgb, var(--success) 18%, white);
+  --metric-border: color-mix(in srgb, var(--success) 40%, transparent);
+  --metric-bg: color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.accounts-page .metric-warning {
+  --metric-color: color-mix(in srgb, var(--warning) 15%, white);
+  --metric-border: color-mix(in srgb, var(--warning) 40%, transparent);
+  --metric-bg: color-mix(in srgb, var(--warning) 25%, transparent);
+}
+
+.accounts-page .metric-danger {
+  --metric-color: color-mix(in srgb, var(--danger) 14%, white);
+  --metric-border: color-mix(in srgb, var(--danger) 40%, transparent);
+  --metric-bg: color-mix(in srgb, var(--danger) 25%, transparent);
+}
+
+.accounts-page .metric-disabled-note {
+  --metric-color: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
+  --metric-border: color-mix(in srgb, var(--border-hover) 90%, transparent);
+  --metric-bg: color-mix(in srgb, var(--bg-hover) 78%, transparent);
+}
+
+.accounts-page .metric-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.accounts-page .metric-name,
+.accounts-page .metric-time,
+.accounts-page .metric-value {
+  font-weight: 600;
+}
+
+.accounts-page .metric-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-page .metric-reset {
+  justify-content: flex-end;
+  margin-top: 3px;
+  color: var(--text-secondary);
+}
+
+.accounts-page .metric-time {
+  color: inherit;
+}
+
+.accounts-page .metric-value {
+  color: color-mix(in srgb, currentColor 82%, white);
+}
+
+.accounts-page .metric-percent {
+  min-width: 30px;
+  font-weight: 700;
+  text-align: right;
+  transition: color 0.3s ease;
+}
+
+.accounts-page .action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  flex-wrap: nowrap;
+  padding-top: 2px;
+}
+
+.accounts-page .confirm-row {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.accounts-page .action-btn {
+  --action-color: var(--text-secondary);
+  --action-border: var(--border-hover);
+  --action-hover-bg: var(--bg-hover);
+  --action-hover-border: var(--border-strong);
+  --action-hover-color: color-mix(in srgb, var(--text-primary) 92%, transparent);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--action-border);
+  background: transparent;
+  color: var(--action-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+
+.accounts-page .action-btn.sync-btn {
+  --action-color: color-mix(in srgb, var(--primary) 82%, var(--text-primary));
+  --action-border: color-mix(in srgb, var(--primary) 32%, var(--border-hover));
+  --action-hover-bg: color-mix(in srgb, var(--primary) 14%, transparent);
+  --action-hover-border: color-mix(in srgb, var(--primary) 48%, var(--border-strong));
+  --action-hover-color: color-mix(in srgb, var(--primary) 88%, var(--text-primary));
+}
+
+.accounts-page .action-btn.power-on {
+  --action-color: color-mix(in srgb, var(--success) 82%, white);
+  --action-border: color-mix(in srgb, var(--success) 36%, var(--border-hover));
+  --action-hover-bg: color-mix(in srgb, var(--success) 14%, transparent);
+  --action-hover-border: color-mix(in srgb, var(--success) 56%, var(--border-strong));
+  --action-hover-color: color-mix(in srgb, var(--success) 92%, white);
+}
+
+.accounts-page .action-btn.power-off {
+  --action-color: color-mix(in srgb, var(--danger) 76%, white);
+  --action-border: color-mix(in srgb, var(--danger) 34%, var(--border-hover));
+  --action-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  --action-hover-border: color-mix(in srgb, var(--danger) 52%, var(--border-strong));
+  --action-hover-color: color-mix(in srgb, var(--danger) 88%, white);
+}
+
+.accounts-page .action-btn:hover:not(:disabled) {
+  background: var(--action-hover-bg);
+  border-color: var(--action-hover-border);
+  color: var(--action-hover-color);
+}
+
+.accounts-page .action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.accounts-page .action-btn.delete-btn {
+  --action-color: var(--danger);
+  --action-border: color-mix(in srgb, var(--danger) 30%, transparent);
+  --action-hover-bg: color-mix(in srgb, var(--danger) 10%, transparent);
+  --action-hover-border: color-mix(in srgb, var(--danger) 50%, transparent);
+  --action-hover-color: var(--danger);
+}
+
+.accounts-page .table-shell {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.accounts-page .accounts-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.accounts-page .accounts-table thead {
+  background: color-mix(in srgb, var(--bg-hover) 56%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.accounts-page .accounts-table th {
+  padding: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.accounts-page .accounts-table td {
+  padding: 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+}
+
+.accounts-page .table-row {
+  transition: all 0.2s;
+  animation: tableRowFadeIn 0.3s ease;
+}
+
+.accounts-page .table-row:hover {
+  background: color-mix(in srgb, var(--bg-hover) 54%, transparent);
+}
+
+.accounts-page .table-row.is-selected {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.accounts-page .col-check {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.accounts-page .col-actions {
+  width: 300px;
+  text-align: right;
+}
+
+.accounts-page .table-checkbox {
+  width: 13px;
+  height: 13px;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-hover);
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.accounts-page .table-account-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 270px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.accounts-page .table-account-sub {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.accounts-page .table-error {
+  margin: 2px 0 0;
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-primary));
+  font-size: 11px;
+  max-width: 280px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.accounts-page .provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: 999px;
+  height: 24px;
+  padding: 0 0.5rem 0 0.35rem;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.accounts-page .provider-chip-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.accounts-page .provider-chip-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.accounts-page .reset-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 132px;
+}
+
+.accounts-page .reset-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.accounts-page .reset-name {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--text-muted);
+}
+
+.accounts-page .reset-relative {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.accounts-page .reset-absolute,
+.accounts-page .reset-none {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.accounts-page .status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: 100%;
+  max-width: 180px;
+}
+
+.accounts-page .status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.accounts-page .status-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-hover) 66%, transparent);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.accounts-page .status-pill.enabled,
+.accounts-page .status-pill.quota-ok {
+  border-color: color-mix(in srgb, var(--success) 56%, var(--border));
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: color-mix(in srgb, var(--success) 80%, var(--text-primary));
+}
+
+.accounts-page .status-pill.quota-warning {
+  border-color: color-mix(in srgb, var(--warning) 56%, var(--border));
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: color-mix(in srgb, var(--warning) 82%, var(--text-primary));
+}
+
+.accounts-page .status-pill.quota-low {
+  border-color: color-mix(in srgb, var(--warning) 56%, var(--border));
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: color-mix(in srgb, var(--warning) 82%, var(--text-primary));
+}
+
+.accounts-page .status-pill.quota-error,
+.accounts-page .status-pill.quota-exhausted,
+.accounts-page .status-pill.quota-empty,
+.accounts-page .status-pill.quota-unknown {
+  border-color: color-mix(in srgb, var(--danger) 56%, var(--border));
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-primary));
+}
+
+.accounts-page .table-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.accounts-page .table-metric {
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-hover) 66%, transparent);
+  padding: 0.375rem 0.5rem;
+}
+
+.accounts-page .table-metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.accounts-page .table-metric-head span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--text-secondary);
+}
+
+.accounts-page .table-metric-head span:last-child {
+  font-weight: 600;
+}
+
+.accounts-page .table-metric-success .table-metric-head span:last-child {
+  color: #4ade80;
+}
+
+.accounts-page .table-metric-warning .table-metric-head span:last-child {
+  color: #fbbf24;
+}
+
+.accounts-page .table-metric-danger .table-metric-head span:last-child {
+  color: #f87171;
+}
+
+.accounts-page .table-progress {
+  margin-top: 0.375rem;
+  position: relative;
+  height: 0.375rem;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.accounts-page .table-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.5s ease-out;
+  background: linear-gradient(90deg, rgb(16 185 129 / 0.5), #34d399);
+}
+
+.accounts-page .table-metric-warning .table-progress span {
+  background: linear-gradient(90deg, rgb(245 158 11 / 0.5), #fbbf24);
+}
+
+.accounts-page .table-metric-danger .table-progress span {
+  background: linear-gradient(90deg, rgb(239 68 68 / 0.5), #f87171);
+}
+
+.accounts-page .table-actions,
+.accounts-page .table-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.accounts-page .table-icon-btn.ui-btn-base {
+  min-height: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border-radius: 0.25rem;
+  font-size: 11px;
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.accounts-page .table-icon-btn.sync-btn.ui-btn-base {
+  border: 1px solid rgb(56 189 248 / 0.2);
+  background: rgb(56 189 248 / 0.1);
+  color: #7dd3fc;
+}
+
+.accounts-page .table-icon-btn.power-on.ui-btn-base {
+  border: 1px solid rgb(74 222 128 / 0.2);
+  background: rgb(74 222 128 / 0.1);
+  color: #4ade80;
+}
+
+.accounts-page .table-icon-btn.power-off.ui-btn-base {
+  border: 1px solid rgb(248 113 113 / 0.2);
+  background: rgb(248 113 113 / 0.1);
+  color: #fb7185;
+}
+
+.accounts-page .table-icon-btn.danger.ui-btn-base {
+  border: 1px solid rgb(248 113 113 / 0.2);
+  background: rgb(248 113 113 / 0.1);
+  color: #f87171;
+}
+
+.accounts-page .table-text-btn.ui-btn-base {
+  min-height: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  font-size: 11px;
+}
+
+.accounts-page .is-spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes alertSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tableRowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .accounts-page .col-actions {
+    width: 270px;
+  }
+}

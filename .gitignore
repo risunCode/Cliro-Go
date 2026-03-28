@@ -1,0 +1,7 @@
+build/bin
+node_modules
+frontend/dist
+frontend/tsconfig.tsbuildinfo
+frontend/package.json.md5
+z_references
+z_references/kilocode-7.1.8
