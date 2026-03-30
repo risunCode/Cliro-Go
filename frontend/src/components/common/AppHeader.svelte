@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte'
-  import { Moon, Palette, Sun } from 'lucide-svelte'
-  import type { Theme } from '@/stores/theme'
+  import { Activity, LayoutDashboard, Logs, Moon, Network, Palette, Settings2, Sun, Users } from 'lucide-svelte'
+  import { getNextThemeLabel, type Theme } from '@/stores/theme'
   import Button from '@/components/common/Button.svelte'
   import appIcon from '@/assets/icons/cliro-icon.png'
   import { APP_TABS, type AppTabId } from '@/utils/tabs'
@@ -9,7 +9,7 @@
   export let activeTab: AppTabId = 'dashboard'
   export let theme: Theme = 'light'
 
-  const appVersion = 'v0.1.0'
+  const appVersion = 'v0.2.0'
 
   const dispatch = createEventDispatcher<{ tabChange: AppTabId; toggleTheme: void }>()
 
@@ -20,8 +20,6 @@
   const onToggleTheme = (): void => {
     dispatch('toggleTheme')
   }
-
-  const themeCycle: Theme[] = ['light', 'dark', 'solarized']
 
   const getThemeIcon = (value: Theme) => {
     if (value === 'light') {
@@ -35,10 +33,23 @@
     return Palette
   }
 
-  const getNextThemeLabel = (value: Theme): string => {
-    const currentIndex = themeCycle.indexOf(value)
-    const nextTheme = themeCycle[(currentIndex + 1) % themeCycle.length]
-    return nextTheme[0].toUpperCase() + nextTheme.slice(1)
+  const getTabIcon = (tabID: AppTabId) => {
+    switch (tabID) {
+      case 'dashboard':
+        return LayoutDashboard
+      case 'accounts':
+        return Users
+      case 'api-router':
+        return Network
+      case 'usage':
+        return Activity
+      case 'system-logs':
+        return Logs
+      case 'settings':
+        return Settings2
+      default:
+        return LayoutDashboard
+    }
   }
 </script>
 
@@ -67,7 +78,7 @@
         {#each APP_TABS as tab}
           <Button
             aria-current={activeTab === tab.id ? 'page' : undefined}
-            className={`px-3 py-1.5 !text-sm !font-medium ${
+            className={`gap-1.5 px-3 py-1.5 !text-sm !font-medium ${
               activeTab === tab.id
                 ? 'border-border bg-surface text-text-primary shadow-soft'
                 : 'border-transparent text-text-secondary hover:text-text-primary'
@@ -76,6 +87,7 @@
             variant="ghost"
             size="sm"
           >
+            <svelte:component this={getTabIcon(tab.id)} size={14} strokeWidth={2} />
             {tab.label}
           </Button>
         {/each}

@@ -1,146 +1,133 @@
 import {
   CancelCodexAuth,
+  CancelKiroAuth,
   ClearCooldown,
   ClearLogs,
   DeleteAccount,
+  ForceRefreshAllQuotas,
   GetAccounts,
+  GetCLISyncFileContent,
+  GetCLISyncStatuses,
   GetCodexAuthSession,
   GetHostName,
+  GetKiroAuthSession,
+  GetLocalModelCatalog,
   GetLogs,
   GetProxyStatus,
+  RefreshCloudflaredStatus,
   GetState,
+  InstallCloudflared,
   ImportAccounts,
-  OpenExternalURL,
   OpenDataDir,
+  OpenExternalURL,
+  RegenerateProxyAPIKey,
   RefreshAccount,
+  RefreshAccountWithQuota,
   RefreshAllQuotas,
   RefreshQuota,
+  SaveCLISyncFileContent,
   SetAllowLAN,
+  SetAuthorizationMode,
   SetAutoStartProxy,
+  SetCircuitBreaker,
+  SetCircuitSteps,
+  SetCloudflaredConfig,
+  SetProxyAPIKey,
   SetProxyPort,
+  SetSchedulingMode,
+  StartCodexAuth,
+  StartCloudflared,
+  StartKiroAuth,
+  StartKiroSocialAuth,
+  StartProxy,
+  StopCloudflared,
+  StopProxy,
+  SyncCLIConfig,
   SyncCodexAccountToCodexCLI,
   SyncCodexAccountToKiloAuth,
   SyncCodexAccountToOpencodeAuth,
-  StartCodexAuth,
-  StartProxy,
-  StopProxy,
   ToggleAccount
 } from '../../wailsjs/go/main/App'
-import type { auth, config, logger, main } from '../../wailsjs/go/models'
+import type { auth } from '../../wailsjs/go/models'
+import {
+  toCodexAuthSyncResult,
+  toCliSyncResult,
+  toCliSyncStatus,
+  toKiloAuthSyncResult,
+  toLocalModelCatalogItem,
+  toOpencodeAuthSyncResult,
+  toProxyStatus,
+  type Account,
+  type AuthSession,
+  type ClearLogsResult,
+  type CliSyncAppID,
+  type CliSyncResult,
+  type CliSyncStatus,
+  type CodexAuthSyncResult,
+  type KiroAuthSession,
+  type KiloAuthSyncResult,
+  type LogEntry,
+  type OpencodeAuthSyncResult,
+  type LocalModelCatalogItem,
+  type ProxyStatus,
+  type UpdateInfo
+} from '@/services/wails-api-types'
 
-export type AppState = main.State
-export type Account = config.Account
-export type AuthSession = auth.CodexAuthSessionView
-export type LogEntry = logger.Entry
-
-export type SyncTargetID = 'kilo-cli' | 'opencode-cli' | 'codex-cli'
-
-export interface SyncResultBase {
-  targetPath: string
-  fileExisted: boolean
-  updatedFields: string[]
-  accountID: string
-  provider: string
-}
-
-export interface KiloAuthSyncResult extends SyncResultBase {
-  target: 'kilo-cli'
-  openAICreated: boolean
-  syncedExpires: number
-  syncedExpiresAt?: string
-}
-
-export interface OpencodeAuthSyncResult extends SyncResultBase {
-  target: 'opencode-cli'
-  openAICreated: boolean
-  syncedExpires: number
-  syncedExpiresAt?: string
-}
-
-export interface CodexAuthSyncResult extends SyncResultBase {
-  target: 'codex-cli'
-  backupPath?: string
-  backupCreated: boolean
-  syncedAt: string
-}
-
-export type AccountSyncResult = KiloAuthSyncResult | OpencodeAuthSyncResult | CodexAuthSyncResult
-
-export interface ProxyStatus {
-  running: boolean
-  port: number
-  url: string
-  bindAddress: string
-  allowLan: boolean
-  autoStartProxy: boolean
-}
-
-const toProxyStatus = (payload: Record<string, any>): ProxyStatus => ({
-  running: Boolean(payload.running),
-  port: Number(payload.port ?? 0),
-  url: String(payload.url ?? ''),
-  bindAddress: String(payload.bindAddress ?? ''),
-  allowLan: Boolean(payload.allowLan),
-  autoStartProxy: Boolean(payload.autoStartProxy)
-})
-
-const toKiloAuthSyncResult = (payload: Record<string, any>): KiloAuthSyncResult => ({
-  target: 'kilo-cli',
-  targetPath: String(payload.targetPath ?? payload.target_path ?? ''),
-  fileExisted: Boolean(payload.fileExisted ?? payload.file_existed),
-  openAICreated: Boolean(payload.openAICreated ?? payload.openai_created),
-  updatedFields: Array.isArray(payload.updatedFields ?? payload.updated_fields)
-    ? (payload.updatedFields ?? payload.updated_fields).map((value: unknown) => String(value))
-    : [],
-  accountID: String(payload.accountID ?? payload.account_id ?? ''),
-  provider: String(payload.provider ?? ''),
-  syncedExpires: Number(payload.syncedExpires ?? payload.synced_expires ?? 0),
-  syncedExpiresAt: String(payload.syncedExpiresAt ?? payload.synced_expires_at ?? '') || undefined
-})
-
-const toOpencodeAuthSyncResult = (payload: Record<string, any>): OpencodeAuthSyncResult => ({
-  target: 'opencode-cli',
-  targetPath: String(payload.targetPath ?? payload.target_path ?? ''),
-  fileExisted: Boolean(payload.fileExisted ?? payload.file_existed),
-  openAICreated: Boolean(payload.openAICreated ?? payload.openai_created),
-  updatedFields: Array.isArray(payload.updatedFields ?? payload.updated_fields)
-    ? (payload.updatedFields ?? payload.updated_fields).map((value: unknown) => String(value))
-    : [],
-  accountID: String(payload.accountID ?? payload.account_id ?? ''),
-  provider: String(payload.provider ?? ''),
-  syncedExpires: Number(payload.syncedExpires ?? payload.synced_expires ?? 0),
-  syncedExpiresAt: String(payload.syncedExpiresAt ?? payload.synced_expires_at ?? '') || undefined
-})
-
-const toCodexAuthSyncResult = (payload: Record<string, any>): CodexAuthSyncResult => ({
-  target: 'codex-cli',
-  targetPath: String(payload.targetPath ?? payload.target_path ?? ''),
-  fileExisted: Boolean(payload.fileExisted ?? payload.file_existed),
-  backupPath: String(payload.backupPath ?? payload.backup_path ?? '') || undefined,
-  backupCreated: Boolean(payload.backupCreated ?? payload.backup_created),
-  updatedFields: Array.isArray(payload.updatedFields ?? payload.updated_fields)
-    ? (payload.updatedFields ?? payload.updated_fields).map((value: unknown) => String(value))
-    : [],
-  accountID: String(payload.accountID ?? payload.account_id ?? ''),
-  provider: String(payload.provider ?? ''),
-  syncedAt: String(payload.syncedAt ?? payload.synced_at ?? '')
-})
+export type {
+  Account,
+  AccountSyncResult,
+  AppState,
+  AuthSession,
+  ClearLogsResult,
+  CliSyncAppID,
+  CliSyncResult,
+  CliSyncStatus,
+  CodexAuthSyncResult,
+  KiroAuthSession,
+  KiloAuthSyncResult,
+  LogEntry,
+  OpencodeAuthSyncResult,
+  LocalModelCatalogItem,
+  ProxyStatus,
+  SyncResultBase,
+  SyncTargetID,
+  UpdateInfo
+} from '@/services/wails-api-types'
 
 export const appService = {
-  getState: (): Promise<AppState> => GetState(),
+  getState: () => GetState(),
   getAccounts: (): Promise<Account[]> => GetAccounts(),
+  getCliSyncFileContent: (appId: CliSyncAppID, path: string): Promise<string> => GetCLISyncFileContent(appId, path),
+  getCliSyncStatuses: async (): Promise<CliSyncStatus[]> => (await GetCLISyncStatuses()).map(toCliSyncStatus),
   getProxyStatus: async (): Promise<ProxyStatus> => toProxyStatus(await GetProxyStatus()),
+  refreshCloudflaredStatus: async (): Promise<ProxyStatus> => toProxyStatus(await RefreshCloudflaredStatus()),
+  getLocalModelCatalog: async (): Promise<LocalModelCatalogItem[]> => (await GetLocalModelCatalog()).map(toLocalModelCatalogItem),
+  getUpdateInfo: async (): Promise<UpdateInfo> => ({
+    currentVersion: '',
+    latestVersion: '',
+    releaseName: '',
+    releaseUrl: '',
+    publishedAt: '',
+    updateAvailable: false
+  }),
   getHostName: async (): Promise<string> => String(await GetHostName()),
   getLogs: (limit = 300): Promise<LogEntry[]> => GetLogs(limit),
+
   importAccounts: (accounts: Account[]): Promise<number> => ImportAccounts(accounts),
 
   startCodexAuth: (): Promise<auth.CodexAuthStart> => StartCodexAuth(),
   getCodexAuthSession: (sessionId: string): Promise<AuthSession> => GetCodexAuthSession(sessionId),
   cancelCodexAuth: (sessionId: string): Promise<void> => CancelCodexAuth(sessionId),
+  startKiroAuth: (): Promise<auth.KiroAuthStart> => StartKiroAuth(),
+  startKiroSocialAuth: (provider: string): Promise<auth.KiroAuthStart> => StartKiroSocialAuth(provider),
+  getKiroAuthSession: (sessionId: string): Promise<KiroAuthSession> => GetKiroAuthSession(sessionId),
+  cancelKiroAuth: (sessionId: string): Promise<void> => CancelKiroAuth(sessionId),
 
   refreshAccount: (accountId: string): Promise<void> => RefreshAccount(accountId),
+  refreshAccountWithQuota: (accountId: string): Promise<void> => RefreshAccountWithQuota(accountId),
   refreshQuota: (accountId: string): Promise<void> => RefreshQuota(accountId),
   refreshAllQuotas: (): Promise<void> => RefreshAllQuotas(),
+  forceRefreshAllQuotas: (): Promise<void> => ForceRefreshAllQuotas(),
   toggleAccount: (accountId: string, enabled: boolean): Promise<void> => ToggleAccount(accountId, enabled),
   deleteAccount: (accountId: string): Promise<void> => DeleteAccount(accountId),
   clearCooldown: (accountId: string): Promise<void> => ClearCooldown(accountId),
@@ -150,14 +137,46 @@ export const appService = {
     toOpencodeAuthSyncResult(await SyncCodexAccountToOpencodeAuth(accountId)),
   syncCodexAccountToCodexCLI: async (accountId: string): Promise<CodexAuthSyncResult> =>
     toCodexAuthSyncResult(await SyncCodexAccountToCodexCLI(accountId)),
+  syncCLIConfig: async (appId: CliSyncAppID, model: string): Promise<CliSyncResult> =>
+    toCliSyncResult(await SyncCLIConfig(appId, model)),
+  saveCliSyncFileContent: (appId: CliSyncAppID, path: string, content: string): Promise<void> => SaveCLISyncFileContent(appId, path, content),
 
   startProxy: (): Promise<void> => StartProxy(),
   stopProxy: (): Promise<void> => StopProxy(),
   setProxyPort: (port: number): Promise<void> => SetProxyPort(port),
   setAllowLAN: (enabled: boolean): Promise<void> => SetAllowLAN(enabled),
   setAutoStartProxy: (enabled: boolean): Promise<void> => SetAutoStartProxy(enabled),
+  setProxyAPIKey: (apiKey: string): Promise<void> => SetProxyAPIKey(apiKey),
+  regenerateProxyAPIKey: (): Promise<string> => RegenerateProxyAPIKey(),
+  setAuthorizationMode: (enabled: boolean): Promise<void> => SetAuthorizationMode(enabled),
+  setSchedulingMode: (mode: string): Promise<void> => SetSchedulingMode(mode),
+  setCircuitBreaker: (enabled: boolean): Promise<void> => SetCircuitBreaker(enabled),
+  setCircuitSteps: (steps: number[]): Promise<void> => SetCircuitSteps(steps),
+  setCloudflaredConfig: (mode: string, token: string, useHttp2: boolean): Promise<void> => SetCloudflaredConfig(mode, token, useHttp2),
+  installCloudflared: (): Promise<void> => InstallCloudflared(),
+  startCloudflared: (): Promise<void> => StartCloudflared(),
+  stopCloudflared: (): Promise<void> => StopCloudflared(),
+  setAutoRefreshQuotaPolicy: (_policy: string): Promise<void> => Promise.reject(new Error('Auto refresh policy is not available in this build')),
+  setAutoRefreshMinutes: (_minutes: number): Promise<void> => Promise.reject(new Error('Auto refresh interval is not available in this build')),
+  setAccountsVisibilityDefaults: (_showExhausted: boolean, _showDisabled: boolean): Promise<void> =>
+    Promise.reject(new Error('Account visibility defaults are not available in this build')),
+  setBatchBehavior: (_behavior: string): Promise<void> => Promise.reject(new Error('Batch behavior is not available in this build')),
+  setLogSettings: (_maxEntries: number, _fileSizeCapMb: number, _verbosity: string): Promise<void> =>
+    Promise.reject(new Error('Log settings are not available in this build')),
+  setImportExportPolicy: (_policy: string): Promise<void> => Promise.reject(new Error('Import/export policy is not available in this build')),
+  setAdvancedSettings: (_networkTimeoutSeconds: number, _retryLimit: number, _quotaRefreshWorkers: number): Promise<void> =>
+    Promise.reject(new Error('Advanced settings are not available in this build')),
+  resetSettingsToDefaults: (): Promise<void> => Promise.reject(new Error('Reset settings is not available in this build')),
 
-  clearLogs: (): Promise<void> => ClearLogs(),
+  clearLogs: async (): Promise<ClearLogsResult> => {
+    await ClearLogs()
+    return {
+      memoryCleared: true,
+      fileCleared: false,
+      pendingRetry: false,
+      error: ''
+    }
+  },
   openExternalURL: (url: string): Promise<void> => OpenExternalURL(url),
   openDataDir: (): Promise<void> => OpenDataDir()
 }

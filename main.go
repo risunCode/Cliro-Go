@@ -19,6 +19,10 @@ func main() {
 		Title:  "cliro-go",
 		Width:  1200,
 		Height: 700,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "cliro-go-single-instance-v1",
+			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

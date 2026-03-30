@@ -244,7 +244,7 @@ func (m *Manager) findCodexAccountForSync(accountID, targetName string) (config.
 
 	provider := strings.TrimSpace(strings.ToLower(account.Provider))
 	if provider == "" {
-		provider = "codex"
+		return config.Account{}, fmt.Errorf("account provider is required for sync to %s", targetName)
 	}
 	if provider != "codex" {
 		return config.Account{}, fmt.Errorf("sync to %s only supports provider codex", targetName)

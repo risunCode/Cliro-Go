@@ -1,38 +1,42 @@
 # CLIro-Go
 
-CLIro-Go is a desktop control plane for running a local OpenAI-compatible proxy powered by ChatGPT Codex accounts. CLIro stands for CLIrouter.
+CLIro-Go is a Wails desktop control plane for running a local OpenAI-compatible proxy across ChatGPT Codex and Kiro accounts. CLIro stands for CLIrouter.
 
-It is built with Wails (Go backend + Svelte frontend), supports multiple accounts, handles OAuth callback login, refreshes tokens and quota, and exposes a local API endpoint compatible with common OpenAI SDK workflows.
-
-Current release: **v0.1.0** (Initial Release)
+Current release: **v0.2.0**
 
 ## Highlights
 
-- OpenAI-compatible local proxy (`/v1/chat/completions`, `/v1/completions`, `/v1/models`)
-- Multi-account pool with round-robin selection and availability filtering
-- OAuth callback flow for Codex account connection
-- Token refresh + quota refresh with multi-endpoint fallback
-- Cooldown and auto-disable handling when quota is exhausted or account is deactivated
-- Desktop dashboard for proxy status, traffic, logs, and account operations
-- Grid/list account views with search, filter, per-account actions, and bulk actions
-- Account import/export (single + selected bulk export)
-- Sync account credentials to local CLI auth files:
-  - Kilo CLI (`~/.local/share/kilo/auth.json`)
-  - Codex CLI (`~/.codex/auth.json`)
+- OpenAI-compatible and Anthropic-compatible local proxy endpoints:
+  - `POST /v1/responses`
+  - `POST /v1/chat/completions`
+  - `POST /v1/completions`
+  - `POST /v1/messages`
+  - `GET /v1/models`
+  - `GET /health`
+  - `GET /v1/stats`
+- Multi-account routing for Codex and Kiro with availability-aware scheduling, circuit breaker steps, and cooldown handling.
+- OAuth flows for Codex plus Kiro device auth and Kiro social auth.
+- Token refresh, quota refresh, smart batch quota refresh, and force-refresh-all quota actions.
+- API Router controls for proxy runtime, security, routing policy, endpoint testing, and Cloudflared public access.
+- Local CLI auth sync for Kilo, Opencode, and Codex CLI.
 
-## Tech Stack
+## Supported Models
 
-- Backend: Go 1.23+
-- Desktop runtime: Wails v2
-- Frontend: Svelte 3 + TypeScript + Vite + Tailwind
- 
+- Codex models are listed directly in `GET /v1/models`.
+- Kiro models are listed directly and also publish `-thinking` aliases.
+- `-thinking` is a Kiro-only convention. Example:
+  - `claude-sonnet-4.5`
+  - `claude-sonnet-4.5-thinking`
+
 ## Local Data
 
-CLIro-Go stores local state in `~/.cliro-go/`:
+CLIro-Go stores runtime state in `~/.cliro-go/`:
 
-- `config.json`: proxy settings (port, LAN access, auto-start)
-- `accounts.json`: connected account records and token/quota metadata
-- `stats.json`: runtime usage counters
+- `config.json` - proxy, auth, scheduling, Cloudflared, and UI-facing settings
+- `accounts.json` - connected account records with token/quota metadata
+- `stats.json` - usage counters for the local proxy
+- `app.log` - persistent application log file
+- `bin/cloudflared(.exe)` - downloaded Cloudflared binary when public access is installed
 
 ## Development
 
@@ -40,7 +44,7 @@ Prerequisites:
 
 - Go 1.23+
 - Node.js 18+ and npm
-- Wails CLI v2
+- Wails CLI v2.11+
 
 Install frontend dependencies:
 
@@ -56,11 +60,13 @@ Run desktop dev mode:
 wails dev
 ```
 
-Run frontend type checks:
+Run validation:
 
 ```bash
 cd frontend
 npm run check
+cd ..
+go test . ./internal/...
 ```
 
 ## Build
@@ -71,60 +77,35 @@ Build desktop app:
 wails build
 ```
 
-Output binary (Windows):
+Windows output:
 
 `build/bin/Cliro-Go.exe`
 
-Build frontend only:
-
-```bash
-cd frontend
-npm run build
-```
-
-## Proxy API
+## Proxy Base URL
 
 Default base URL:
 
 `http://localhost:8095`
-
-Key endpoints:
-
-- `GET /health`
-- `GET /v1/stats`
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-- `POST /v1/completions`
 
 Example:
 
 ```bash
 curl -X POST http://localhost:8095/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-5.2-codex","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"gpt-5.3-codex","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-## UI Features
+## Notes
 
-- **Dashboard**: compact KPI cards, traffic/token grids, host-based greeting hero
-- **Accounts**:
-  - provider filters (`All`, `Codex`, etc.)
-  - grid/list view toggle
-  - selection mode + bulk actions (`power`, `export`, `delete`)
-  - import from JSON
-  - per-account sync to Kilo CLI / Codex CLI auth
-- **System Logs**:
-  - structured table-like log stream
-  - search + level/scope filters
-  - sortable order (newest/oldest)
-  - copy visible logs
+- Authorization mode requires the configured API key for all proxy routes.
+- Cloudflared public access is managed from the API Router tab and depends on the local proxy being online.
+- Smart `Refresh All Quotas` skips accounts still waiting for quota reset; `Force Refresh All Quotas` checks every configured account.
 
-## Security Notes
+## Attribution
 
-- Tokens are stored locally in JSON files; keep OS file permissions restricted.
-- Enabling LAN mode binds proxy to `0.0.0.0` and exposes it on local network.
-- Use trusted networks only if LAN mode is enabled.
+- Codex and Kiro icons/marks remain the property of their respective owners.
+- The CLIRO route app icon uses Icons8 artwork: `https://icons8.com/icons/set/route`
 
 ## Release Notes
 
-See full release details in [`CHANGELOG.md`](CHANGELOG.md).
+See [`CHANGELOG.md`](CHANGELOG.md) for the full `v0.2.0` change history.

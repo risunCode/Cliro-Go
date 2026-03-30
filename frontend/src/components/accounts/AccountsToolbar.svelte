@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
-  import { Download, Power, RefreshCw, Trash2, Upload } from 'lucide-svelte'
+  import { createEventDispatcher, onDestroy, onMount } from 'svelte'
+  import { Ban, ChevronDown, Download, Power, RefreshCw, Trash2 } from 'lucide-svelte'
   import { formatNumber } from '@/utils/formatters'
-  import type { ProviderGroup } from '@/utils/accounts/provider'
+  import type { ProviderGroup } from '@/utils/account'
 
   export let accountsTotal = 0
   export let accountsByProvider: ProviderGroup[] = []
@@ -14,32 +14,86 @@
   export let view: 'card' | 'table' = 'card'
   export let refreshingAllQuotas = false
   export let bulkBusy = false
+  export let bannedCount = 0
 
   const dispatch = createEventDispatcher<{
     providerChange: string
     viewChange: 'card' | 'table'
     toggleSelectAllVisible: void
     refreshAllQuotas: void
-    importAccounts: void
-    bulkTogglePower: void
+    forceRefreshAllQuotas: void
+    bulkEnable: void
+    bulkDisable: void
     bulkExport: void
     bulkDelete: void
+    bulkDeleteBanned: void
   }>()
+
+  let bulkMenuOpen = false
+  let bulkMenuEl: HTMLDivElement | null = null
 
   const activeProviderClass = 'provider-tab-active'
   const inactiveProviderClass = 'provider-tab-inactive'
 
   $: selectionActive = selectedCount > 0 || allVisibleSelected
   $: selectButtonLabel = selectionActive ? `Select [${formatNumber(selectedCount)}]` : 'Select'
-  $: bulkPowerLabel = selectedCount > 0 && selectedEnabledCount === selectedCount ? 'Disable' : 'Enable'
+  $: canOpenBulkMenu = accountsTotal > 0 || bannedCount > 0
+  $: bulkActionLabel = selectedCount > 0 ? `Bulk Actions [${formatNumber(selectedCount)}]` : 'Bulk Actions'
+  $: canEnableSelected = selectedCount > selectedEnabledCount
+  $: canDisableSelected = selectedEnabledCount > 0
+
+  const closeBulkMenu = (): void => {
+    bulkMenuOpen = false
+  }
+
+  const toggleBulkMenu = (): void => {
+    if (!canOpenBulkMenu || bulkBusy || refreshingAllQuotas) {
+      return
+    }
+    bulkMenuOpen = !bulkMenuOpen
+  }
+
+  const handleBulkMenuAction = (action: 'forceRefreshAllQuotas' | 'bulkEnable' | 'bulkDisable' | 'bulkExport' | 'bulkDelete' | 'bulkDeleteBanned'): void => {
+    if (bulkBusy || refreshingAllQuotas) {
+      return
+    }
+    dispatch(action)
+    closeBulkMenu()
+  }
+
+  const handleGlobalPointerDown = (event: MouseEvent): void => {
+    if (!bulkMenuOpen) {
+      return
+    }
+    const target = event.target as Node | null
+    if (target && bulkMenuEl && !bulkMenuEl.contains(target)) {
+      closeBulkMenu()
+    }
+  }
+
+  const handleGlobalKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      closeBulkMenu()
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener('mousedown', handleGlobalPointerDown)
+    document.addEventListener('keydown', handleGlobalKeyDown)
+  })
+
+  onDestroy(() => {
+    document.removeEventListener('mousedown', handleGlobalPointerDown)
+    document.removeEventListener('keydown', handleGlobalKeyDown)
+  })
 </script>
 
 <div class="accounts-toolbar border-b border-border pb-3">
   <div class="toolbar-top-row">
-    <div class="provider-tabs">
+    <div class="provider-tabs segment-control">
       <button
         type="button"
-        class={`provider-tab ${selectedProvider === 'all'
+        class={`provider-tab segment-control-item ${selectedProvider === 'all'
           ? activeProviderClass
           : inactiveProviderClass}`}
         on:click={() => dispatch('providerChange', 'all')}
@@ -50,7 +104,7 @@
       {#each accountsByProvider as group}
         <button
           type="button"
-          class={`provider-tab ${selectedProvider === group.id
+          class={`provider-tab segment-control-item ${selectedProvider === group.id
             ? activeProviderClass
             : inactiveProviderClass}`}
           on:click={() => dispatch('providerChange', group.id)}
@@ -62,7 +116,7 @@
 
     <div class="toolbar-bottom-actions">
       <button type="button" class="selection-btn refresh-btn" disabled={refreshingAllQuotas} on:click={() => dispatch('refreshAllQuotas')}>
-        <RefreshCw size={14} class={refreshingAllQuotas ? 'is-spinning' : ''} />
+        <RefreshCw size={14} class={refreshingAllQuotas ? 'accounts-spinning' : ''} />
         <span>Refresh All Quotas</span>
       </button>
 
@@ -75,32 +129,98 @@
         {selectButtonLabel}
       </button>
 
-      <button type="button" class="selection-btn import-btn" disabled={bulkBusy} on:click={() => dispatch('importAccounts')}>
-        <Upload size={14} />
-        <span>Import</span>
-      </button>
-
-      {#if selectionActive}
-        <button type="button" class="selection-btn bulk-action-btn" disabled={bulkBusy} on:click={() => dispatch('bulkTogglePower')}>
-          <Power size={14} />
-          <span>{bulkPowerLabel}</span>
-        </button>
-
-        <button type="button" class="selection-btn bulk-action-btn" disabled={bulkBusy} on:click={() => dispatch('bulkExport')}>
-          <Download size={14} />
-          <span>Export</span>
-        </button>
-
-        <button type="button" class="selection-btn bulk-delete-btn" disabled={bulkBusy} on:click={() => dispatch('bulkDelete')}>
-          <Trash2 size={14} />
-          <span>Delete</span>
-        </button>
-      {/if}
-
-      <div class="view-toggle" role="tablist" aria-label="Accounts view toggle">
+      <div class="bulk-actions-menu" bind:this={bulkMenuEl}>
         <button
           type="button"
-          class="view-button"
+          class={`selection-btn tone-primary ${bulkMenuOpen ? 'selection-btn-active' : ''}`}
+          disabled={!canOpenBulkMenu || bulkBusy || refreshingAllQuotas}
+          aria-expanded={bulkMenuOpen}
+          aria-haspopup="menu"
+          on:click={toggleBulkMenu}
+        >
+          <span>{bulkActionLabel}</span>
+          <ChevronDown size={14} class={`bulk-menu-chevron ${bulkMenuOpen ? 'is-open' : ''}`} />
+        </button>
+
+        {#if bulkMenuOpen}
+          <div class="bulk-actions-panel" role="menu" aria-label="Bulk actions menu">
+            <button
+              type="button"
+              class="bulk-action-item"
+              role="menuitem"
+              disabled={accountsTotal === 0 || bulkBusy || refreshingAllQuotas}
+              on:click={() => handleBulkMenuAction('forceRefreshAllQuotas')}
+            >
+              <RefreshCw size={14} class={refreshingAllQuotas ? 'accounts-spinning' : ''} />
+              <span>Force Refresh All Quotas</span>
+            </button>
+
+            <div class="bulk-action-divider" />
+
+            <button
+              type="button"
+              class="bulk-action-item"
+              role="menuitem"
+              disabled={!canEnableSelected || bulkBusy}
+              on:click={() => handleBulkMenuAction('bulkEnable')}
+            >
+              <Power size={14} />
+              <span>Enable Selected</span>
+            </button>
+
+            <button
+              type="button"
+              class="bulk-action-item"
+              role="menuitem"
+              disabled={!canDisableSelected || bulkBusy}
+              on:click={() => handleBulkMenuAction('bulkDisable')}
+            >
+              <Power size={14} />
+              <span>Disable Selected</span>
+            </button>
+
+            <button
+              type="button"
+              class="bulk-action-item"
+              role="menuitem"
+              disabled={selectedCount === 0 || bulkBusy}
+              on:click={() => handleBulkMenuAction('bulkExport')}
+            >
+              <Download size={14} />
+              <span>Export Selected</span>
+            </button>
+
+            <button
+              type="button"
+              class="bulk-action-item tone-danger"
+              role="menuitem"
+              disabled={selectedCount === 0 || bulkBusy}
+              on:click={() => handleBulkMenuAction('bulkDelete')}
+            >
+              <Trash2 size={14} />
+              <span>Delete Selected</span>
+            </button>
+
+            <div class="bulk-action-divider" />
+
+            <button
+              type="button"
+              class="bulk-action-item tone-danger"
+              role="menuitem"
+              disabled={bannedCount === 0 || bulkBusy}
+              on:click={() => handleBulkMenuAction('bulkDeleteBanned')}
+            >
+              <Ban size={14} />
+              <span>Delete Banned Accounts ({formatNumber(bannedCount)})</span>
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <div class="view-toggle segment-control" role="tablist" aria-label="Accounts view toggle">
+        <button
+          type="button"
+          class="view-button segment-control-item"
           class:is-active={view === 'card'}
           role="tab"
           aria-selected={view === 'card'}
@@ -118,7 +238,7 @@
 
         <button
           type="button"
-          class="view-button"
+          class="view-button segment-control-item"
           class:is-active={view === 'table'}
           role="tab"
           aria-selected={view === 'table'}

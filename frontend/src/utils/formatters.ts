@@ -5,6 +5,10 @@ export const formatNumber = (value: number | undefined): string => {
   return new Intl.NumberFormat().format(value)
 }
 
+export const nowUnixSeconds = (): number => {
+  return Math.floor(Date.now() / 1000)
+}
+
 export const formatDateTime = (value: number | undefined): string => {
   if (!value) {
     return '-'
@@ -29,18 +33,4 @@ export const formatUnixSeconds = (value: number | undefined): string => {
     return '-'
   }
   return formatDateTime(value * 1000)
-}
-
-export const getQuotaTone = (status: string | undefined): 'success' | 'warning' | 'error' | 'neutral' => {
-  const normalized = (status ?? '').toLowerCase()
-  if (normalized === 'healthy') {
-    return 'success'
-  }
-  if (normalized === 'low') {
-    return 'warning'
-  }
-  if (normalized === 'exhausted' || normalized === 'error') {
-    return 'error'
-  }
-  return 'neutral'
 }

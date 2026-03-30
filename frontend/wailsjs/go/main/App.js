@@ -6,6 +6,10 @@ export function CancelCodexAuth(arg1) {
   return window['go']['main']['App']['CancelCodexAuth'](arg1);
 }
 
+export function CancelKiroAuth(arg1) {
+  return window['go']['main']['App']['CancelKiroAuth'](arg1);
+}
+
 export function ClearCooldown(arg1) {
   return window['go']['main']['App']['ClearCooldown'](arg1);
 }
@@ -18,8 +22,20 @@ export function DeleteAccount(arg1) {
   return window['go']['main']['App']['DeleteAccount'](arg1);
 }
 
+export function ForceRefreshAllQuotas() {
+  return window['go']['main']['App']['ForceRefreshAllQuotas']();
+}
+
 export function GetAccounts() {
   return window['go']['main']['App']['GetAccounts']();
+}
+
+export function GetCLISyncFileContent(arg1, arg2) {
+  return window['go']['main']['App']['GetCLISyncFileContent'](arg1, arg2);
+}
+
+export function GetCLISyncStatuses() {
+  return window['go']['main']['App']['GetCLISyncStatuses']();
 }
 
 export function GetCodexAuthSession(arg1) {
@@ -28,6 +44,14 @@ export function GetCodexAuthSession(arg1) {
 
 export function GetHostName() {
   return window['go']['main']['App']['GetHostName']();
+}
+
+export function GetKiroAuthSession(arg1) {
+  return window['go']['main']['App']['GetKiroAuthSession'](arg1);
+}
+
+export function GetLocalModelCatalog() {
+  return window['go']['main']['App']['GetLocalModelCatalog']();
 }
 
 export function GetLogs(arg1) {
@@ -46,6 +70,10 @@ export function ImportAccounts(arg1) {
   return window['go']['main']['App']['ImportAccounts'](arg1);
 }
 
+export function InstallCloudflared() {
+  return window['go']['main']['App']['InstallCloudflared']();
+}
+
 export function OpenDataDir() {
   return window['go']['main']['App']['OpenDataDir']();
 }
@@ -58,36 +86,96 @@ export function RefreshAccount(arg1) {
   return window['go']['main']['App']['RefreshAccount'](arg1);
 }
 
+export function RefreshAccountWithQuota(arg1) {
+  return window['go']['main']['App']['RefreshAccountWithQuota'](arg1);
+}
+
 export function RefreshAllQuotas() {
   return window['go']['main']['App']['RefreshAllQuotas']();
+}
+
+export function RefreshCloudflaredStatus() {
+  return window['go']['main']['App']['RefreshCloudflaredStatus']();
 }
 
 export function RefreshQuota(arg1) {
   return window['go']['main']['App']['RefreshQuota'](arg1);
 }
 
+export function RegenerateProxyAPIKey() {
+  return window['go']['main']['App']['RegenerateProxyAPIKey']();
+}
+
+export function SaveCLISyncFileContent(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveCLISyncFileContent'](arg1, arg2, arg3);
+}
+
 export function SetAllowLAN(arg1) {
   return window['go']['main']['App']['SetAllowLAN'](arg1);
+}
+
+export function SetAuthorizationMode(arg1) {
+  return window['go']['main']['App']['SetAuthorizationMode'](arg1);
 }
 
 export function SetAutoStartProxy(arg1) {
   return window['go']['main']['App']['SetAutoStartProxy'](arg1);
 }
 
+export function SetCircuitBreaker(arg1) {
+  return window['go']['main']['App']['SetCircuitBreaker'](arg1);
+}
+
+export function SetCircuitSteps(arg1) {
+  return window['go']['main']['App']['SetCircuitSteps'](arg1);
+}
+
+export function SetCloudflaredConfig(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetCloudflaredConfig'](arg1, arg2, arg3);
+}
+
+export function SetProxyAPIKey(arg1) {
+  return window['go']['main']['App']['SetProxyAPIKey'](arg1);
+}
+
 export function SetProxyPort(arg1) {
   return window['go']['main']['App']['SetProxyPort'](arg1);
+}
+
+export function SetSchedulingMode(arg1) {
+  return window['go']['main']['App']['SetSchedulingMode'](arg1);
+}
+
+export function StartCloudflared() {
+  return window['go']['main']['App']['StartCloudflared']();
 }
 
 export function StartCodexAuth() {
   return window['go']['main']['App']['StartCodexAuth']();
 }
 
+export function StartKiroAuth() {
+  return window['go']['main']['App']['StartKiroAuth']();
+}
+
+export function StartKiroSocialAuth(arg1) {
+  return window['go']['main']['App']['StartKiroSocialAuth'](arg1);
+}
+
 export function StartProxy() {
   return window['go']['main']['App']['StartProxy']();
 }
 
+export function StopCloudflared() {
+  return window['go']['main']['App']['StopCloudflared']();
+}
+
 export function StopProxy() {
   return window['go']['main']['App']['StopProxy']();
+}
+
+export function SyncCLIConfig(arg1, arg2) {
+  return window['go']['main']['App']['SyncCLIConfig'](arg1, arg2);
 }
 
 export function SyncCodexAccountToCodexCLI(arg1) {

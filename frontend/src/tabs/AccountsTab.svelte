@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { Link2, Search } from 'lucide-svelte'
+  import { onDestroy, onMount } from 'svelte'
+  import { ChevronDown, Link2, Search, Upload } from 'lucide-svelte'
   import Button from '@/components/common/Button.svelte'
   import ConnectPromptModal from '@/components/accounts/ConnectPromptModal.svelte'
+  import KiroConnectModal from '@/components/accounts/KiroConnectModal.svelte'
   import AccountDetailModal from '@/components/accounts/AccountDetailModal.svelte'
   import AccountSyncModal from '@/components/accounts/AccountSyncModal.svelte'
   import BatchDeleteModal from '@/components/accounts/BatchDeleteModal.svelte'
@@ -10,31 +12,73 @@
   import AccountsTable from '@/components/accounts/AccountsTable.svelte'
   import { toastStore } from '@/stores/toast'
   import { getErrorMessage } from '@/services/error'
+  import {
+    computeAccountsViewState,
+    isPendingAuthSession,
+    parseImportedAccounts,
+    runAccountSyncByTarget,
+    sanitizeSelectedIDs,
+    shouldAttachPendingSession,
+    shouldDismissPromptAfterSuccess,
+    syncTargetName
+  } from '@/services/accounts'
   import type {
     Account,
     AuthSession,
     AccountSyncResult,
     CodexAuthSyncResult,
+    KiroAuthSession,
     KiloAuthSyncResult,
     OpencodeAuthSyncResult,
     SyncTargetID
   } from '@/services/wails-api'
   import { formatNumber } from '@/utils/formatters'
-  import { filterAccounts } from '@/utils/accounts/filters'
-  import { groupAccountsByProvider } from '@/utils/accounts/provider'
-  import { areAllVisibleSelected, toggleSelectAllVisible, toggleSelectedID } from '@/utils/accounts/selection'
-  import './AccountsTab.css'
+  import { copyTextToClipboard, downloadJSONFile, hasClipboardWrite } from '@/utils/browser'
+  import { toggleSelectAllVisible, toggleSelectedID } from '@/utils/account'
+
+  const SHOW_EXHAUSTED_STORAGE_KEY = 'accounts-show-exhausted'
+  const SHOW_DISABLED_STORAGE_KEY = 'accounts-show-disabled'
+
+  const readStoredBoolean = (key: string, fallback: boolean): boolean => {
+    if (typeof window === 'undefined') {
+      return fallback
+    }
+
+    const stored = window.localStorage.getItem(key)
+    if (stored === 'true') {
+      return true
+    }
+    if (stored === 'false') {
+      return false
+    }
+
+    return fallback
+  }
+
+  const hasStoredBoolean = (key: string): boolean => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    const stored = window.localStorage.getItem(key)
+    return stored === 'true' || stored === 'false'
+  }
 
   export let accounts: Account[] = []
-  export let authSession: AuthSession | null = null
-  export let authWorking = false
   export let busyAccountIds: string[] = []
+  export let authSession: AuthSession | null = null
+  export let kiroAuthSession: KiroAuthSession | null = null
+  export let authWorking = false
   export let refreshingAllQuotas = false
+  export let showExhaustedDefault = true
+  export let showDisabledDefault = true
 
   export let onStartConnect: () => Promise<void>
   export let onCancelConnect: () => Promise<void>
+  export let onStartKiroConnect: (method: 'device' | 'google' | 'github') => Promise<void>
+  export let onCancelKiroConnect: () => Promise<void>
   export let onOpenExternalURL: (url: string) => Promise<void>
   export let onRefreshAllQuotas: () => Promise<void>
+  export let onForceRefreshAllQuotas: () => Promise<void>
   export let onToggleAccount: (accountId: string, enabled: boolean) => Promise<void>
   export let onBulkToggleAccounts: (accountIds: string[], enabled: boolean) => Promise<void>
   export let onBulkDeleteAccounts: (accountIds: string[]) => Promise<void>
@@ -45,8 +89,8 @@
   export let onRefreshAccountWithQuota: (accountId: string) => Promise<void>
   export let onDeleteAccount: (accountId: string) => Promise<void>
 
-  const isPendingAuth = (session: AuthSession | null): boolean => {
-    return (session?.status ?? '') === 'pending'
+  const isBannedAccount = (account: Account): boolean => {
+    return Boolean(account.banned)
   }
 
   let selectedIds: string[] = []
@@ -54,7 +98,11 @@
   let refreshingAccount = ''
   let actionAccount = ''
   let showConnectPrompt = false
+  let showKiroConnectModal = false
   let connectPromptSessionID = ''
+  let kiroPromptSessionID = ''
+  let connectMenuOpen = false
+  let connectMenuEl: HTMLDivElement | null = null
   let detailAccount: Account | null = null
   let syncAccountID = ''
   let syncTargetID: SyncTargetID = 'kilo-cli'
@@ -63,31 +111,39 @@
   let syncResult: AccountSyncResult | null = null
   let showSyncModal = false
   let showBulkDeleteModal = false
+  let showBannedDeleteModal = false
   let searchQuery = ''
   let selectedProvider = 'all'
+  let showExhausted = true
+  let showDisabled = true
+  let visibilityInitialized = false
+  let exhaustedDisabledCount = 0
   let view: 'card' | 'table' = 'card'
   let bulkBusy = false
   let importInputEl: HTMLInputElement | null = null
 
-  $: accountsByProvider = groupAccountsByProvider(accounts)
-  $: filteredAccounts = filterAccounts(accounts, { providerId: selectedProvider, query: searchQuery })
-  $: visibleAccountIds = filteredAccounts.map((account) => account.id)
-  $: hasVisibleAccounts = visibleAccountIds.length > 0
-  $: allVisibleSelected = areAllVisibleSelected(selectedIds, visibleAccountIds)
-  $: selectedAccounts = accounts.filter((account) => selectedIds.includes(account.id))
-  $: selectedEnabledCount = selectedAccounts.filter((account) => account.enabled).length
-  $: bulkToggleToEnabled = selectedIds.length > 0 && selectedEnabledCount !== selectedIds.length
-  $: validAccountIDs = new Set(accounts.map((account) => account.id))
+  $: viewState = computeAccountsViewState(accounts, selectedIds, selectedProvider, searchQuery, {
+    showExhausted,
+    showDisabled
+  })
+  $: accountsByProvider = viewState.accountsByProvider
+  $: filteredAccounts = viewState.filteredAccounts
+  $: visibleAccountIds = viewState.visibleAccountIds
+  $: hasVisibleAccounts = viewState.hasVisibleAccounts
+  $: allVisibleSelected = viewState.allVisibleSelected
+  $: selectedAccounts = viewState.selectedAccounts
+  $: selectedEnabledCount = viewState.selectedEnabledCount
+  $: exhaustedDisabledCount = viewState.exhaustedDisabledCount
+  $: showExhaustedDisabled = showExhausted && showDisabled
+  $: exhaustedDisabledFilterLabel = `${showExhaustedDisabled ? 'Hide' : 'Show'} Exhausted/Disabled [${formatNumber(exhaustedDisabledCount)}]`
+  $: bannedAccountIDs = accounts.filter((account) => isBannedAccount(account)).map((account) => account.id)
+  $: bannedCount = bannedAccountIDs.length
   $: syncAccount = accounts.find((account) => account.id === syncAccountID) || null
   $: {
-    const nextSelectedIDs = selectedIds.filter((id) => validAccountIDs.has(id))
+    const nextSelectedIDs = sanitizeSelectedIDs(selectedIds, accounts)
     if (nextSelectedIDs.length !== selectedIds.length) {
       selectedIds = nextSelectedIDs
     }
-  }
-
-  const canCopyAuthLink = (): boolean => {
-    return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function'
   }
 
   function handleToggleSelection(id: string) {
@@ -98,25 +154,30 @@
     selectedIds = toggleSelectAllVisible(selectedIds, visibleAccountIds, allVisibleSelected)
   }
 
-  const parseImportedAccounts = (raw: unknown): Account[] => {
-    if (Array.isArray(raw)) {
-      return raw.filter((item) => item && typeof item === 'object') as Account[]
-    }
-
-    if (raw && typeof raw === 'object') {
-      const payload = raw as Record<string, unknown>
-      if (Array.isArray(payload.accounts)) {
-        return payload.accounts.filter((item) => item && typeof item === 'object') as Account[]
-      }
-      return [raw as Account]
-    }
-
-    return []
-  }
-
   function handleSearchInput(event: Event) {
     const target = event.currentTarget as HTMLInputElement
     searchQuery = target.value
+  }
+
+  const sanitizeFileSegment = (value: string | undefined, fallback: string): string => {
+    const normalized = (value || '').trim().toLowerCase()
+    if (!normalized) {
+      return fallback
+    }
+
+    const sanitized = normalized
+      .replace(/[@\s]+/g, '_')
+      .replace(/[^a-z0-9._-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^[_\-.]+|[_\-.]+$/g, '')
+
+    return sanitized || fallback
+  }
+
+  const buildExportFileName = (account: Account): string => {
+    const provider = sanitizeFileSegment(account.provider, 'provider')
+    const identity = sanitizeFileSegment(account.email || account.id, 'account')
+    return `cliro_${provider}_${identity}.json`
   }
 
   async function handleRefreshWithQuota(accountId: string) {
@@ -196,16 +257,13 @@
     syncResult = null
 
     try {
-      if (target === 'codex-cli') {
-        syncResult = await onSyncCodexAccountToCodexCLI(syncAccountID)
-      } else if (target === 'opencode-cli') {
-        syncResult = await onSyncCodexAccountToOpencodeAuth(syncAccountID)
-      } else {
-        syncResult = await onSyncCodexAccountToKiloAuth(syncAccountID)
-      }
+      syncResult = await runAccountSyncByTarget(syncAccountID, target, {
+        toKilo: onSyncCodexAccountToKiloAuth,
+        toOpencode: onSyncCodexAccountToOpencodeAuth,
+        toCodex: onSyncCodexAccountToCodexCLI
+      })
     } catch (error) {
-      const targetName = target === 'codex-cli' ? 'Codex CLI' : target === 'opencode-cli' ? 'Opencode' : 'Kilo CLI'
-      syncError = getErrorMessage(error, `Unable to sync account to ${targetName} auth file.`)
+      syncError = getErrorMessage(error, `Unable to sync account to ${syncTargetName(target)} auth file.`)
     } finally {
       syncBusy = false
     }
@@ -217,24 +275,33 @@
       return
     }
 
-    const data = JSON.stringify(account, null, 2)
-    const blob = new Blob([data], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `account-${accountId}.json`
-    anchor.click()
-    URL.revokeObjectURL(url)
+    downloadJSONFile(account, buildExportFileName(account))
   }
 
-  async function handleBulkTogglePower() {
+  async function handleBulkEnable() {
     if (selectedIds.length === 0 || bulkBusy) {
       return
     }
 
     bulkBusy = true
     try {
-      await onBulkToggleAccounts([...selectedIds], bulkToggleToEnabled)
+      await onBulkToggleAccounts([...selectedIds], true)
+      selectedIds = []
+    } catch (error) {
+      toastStore.push('error', 'Bulk Update Failed', getErrorMessage(error, 'Unable to update selected accounts.'))
+    } finally {
+      bulkBusy = false
+    }
+  }
+
+  async function handleBulkDisable() {
+    if (selectedIds.length === 0 || bulkBusy) {
+      return
+    }
+
+    bulkBusy = true
+    try {
+      await onBulkToggleAccounts([...selectedIds], false)
       selectedIds = []
     } catch (error) {
       toastStore.push('error', 'Bulk Update Failed', getErrorMessage(error, 'Unable to update selected accounts.'))
@@ -254,14 +321,7 @@
       accounts: selectedAccounts
     }
 
-    const data = JSON.stringify(payload, null, 2)
-    const blob = new Blob([data], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `accounts-selected-${Date.now()}.json`
-    anchor.click()
-    URL.revokeObjectURL(url)
+    downloadJSONFile(payload, `accounts-selected-${Date.now()}.json`)
   }
 
   async function handleBulkDelete() {
@@ -270,6 +330,29 @@
     }
 
     showBulkDeleteModal = true
+  }
+
+  async function handleForceRefreshAllQuotas() {
+    if (bulkBusy || refreshingAllQuotas) {
+      return
+    }
+
+    bulkBusy = true
+    try {
+      await onForceRefreshAllQuotas()
+    } catch (error) {
+      toastStore.push('error', 'Force Refresh Failed', getErrorMessage(error, 'Unable to force refresh all quota snapshots.'))
+    } finally {
+      bulkBusy = false
+    }
+  }
+
+  async function handleDeleteBannedAccounts() {
+    if (bannedCount === 0 || bulkBusy) {
+      return
+    }
+
+    showBannedDeleteModal = true
   }
 
   async function handleConfirmBulkDelete() {
@@ -285,6 +368,24 @@
       showBulkDeleteModal = false
     } catch (error) {
       toastStore.push('error', 'Bulk Delete Failed', getErrorMessage(error, 'Unable to delete selected accounts.'))
+    } finally {
+      bulkBusy = false
+    }
+  }
+
+  async function handleConfirmDeleteBanned() {
+    if (bannedAccountIDs.length === 0 || bulkBusy) {
+      showBannedDeleteModal = false
+      return
+    }
+
+    bulkBusy = true
+    try {
+      await onBulkDeleteAccounts([...bannedAccountIDs])
+      selectedIds = sanitizeSelectedIDs(selectedIds, accounts.filter((account) => !isBannedAccount(account)))
+      showBannedDeleteModal = false
+    } catch (error) {
+      toastStore.push('error', 'Delete Banned Failed', getErrorMessage(error, 'Unable to delete banned accounts.'))
     } finally {
       bulkBusy = false
     }
@@ -328,9 +429,16 @@
     showBulkDeleteModal = false
   }
 
+  function handleCancelDeleteBanned() {
+    if (bulkBusy) {
+      return
+    }
+    showBannedDeleteModal = false
+  }
+
   const handleStartConnect = async (): Promise<void> => {
     showConnectPrompt = true
-    if (isPendingAuth(authSession)) {
+    if (isPendingAuthSession(authSession)) {
       connectPromptSessionID = authSession?.sessionId || ''
       return
     }
@@ -338,6 +446,99 @@
     connectPromptSessionID = ''
     await onStartConnect()
     connectPromptSessionID = authSession?.sessionId || ''
+  }
+
+  const closeConnectMenu = (): void => {
+    connectMenuOpen = false
+  }
+
+  const toggleConnectMenu = (): void => {
+    connectMenuOpen = !connectMenuOpen
+  }
+
+  const handleSelectConnectProvider = async (provider: 'codex' | 'kiro'): Promise<void> => {
+    closeConnectMenu()
+
+    if (provider === 'codex') {
+      showKiroConnectModal = false
+      await handleStartConnect()
+      return
+    }
+
+    showConnectPrompt = false
+    connectPromptSessionID = ''
+
+    if (isPendingAuthSession(kiroAuthSession)) {
+      kiroPromptSessionID = kiroAuthSession?.sessionId || ''
+      showKiroConnectModal = true
+      return
+    }
+
+    kiroPromptSessionID = ''
+    showKiroConnectModal = true
+  }
+
+  const handleStartKiroDeviceAuth = async (): Promise<void> => {
+	showKiroConnectModal = true
+	try {
+		await onStartKiroConnect('device')
+	} catch {
+		showKiroConnectModal = false
+	}
+  }
+
+  const handleStartKiroGoogleAuth = async (): Promise<void> => {
+	showKiroConnectModal = true
+	try {
+		await onStartKiroConnect('google')
+	} catch {
+		showKiroConnectModal = false
+	}
+  }
+
+  const handleStartKiroGitHubAuth = async (): Promise<void> => {
+	showKiroConnectModal = true
+	try {
+		await onStartKiroConnect('github')
+	} catch {
+		showKiroConnectModal = false
+	}
+  }
+
+  const handleOpenKiroAuthLink = async (): Promise<void> => {
+    if (!kiroAuthSession?.authUrl) {
+      return
+    }
+    await onOpenExternalURL(kiroAuthSession.authUrl)
+  }
+
+  const handleCopyKiroAuthLink = async (): Promise<void> => {
+    if (!kiroAuthSession?.authUrl || !hasClipboardWrite()) {
+      return
+    }
+
+    await copyTextToClipboard(kiroAuthSession.authUrl)
+  }
+
+  const handleCopyKiroUserCode = async (): Promise<void> => {
+    if (!kiroAuthSession?.userCode || !hasClipboardWrite()) {
+      return
+    }
+
+    await copyTextToClipboard(kiroAuthSession.userCode)
+  }
+
+  const handleCancelKiroModal = async (): Promise<void> => {
+    showKiroConnectModal = false
+    kiroPromptSessionID = ''
+    if (isPendingAuthSession(kiroAuthSession)) {
+      await onCancelKiroConnect()
+    }
+  }
+
+  const handleDismissKiroModal = (): void => {
+    showKiroConnectModal = false
+    kiroPromptSessionID = ''
   }
 
   const handleOpenAuthLink = async (): Promise<void> => {
@@ -348,17 +549,17 @@
   }
 
   const handleCopyAuthLink = async (): Promise<void> => {
-    if (!authSession?.authUrl || !canCopyAuthLink()) {
+    if (!authSession?.authUrl || !hasClipboardWrite()) {
       return
     }
 
-    await navigator.clipboard.writeText(authSession.authUrl)
+    await copyTextToClipboard(authSession.authUrl)
   }
 
   const handleCancelFromModal = async (): Promise<void> => {
     showConnectPrompt = false
     connectPromptSessionID = ''
-    if (isPendingAuth(authSession)) {
+    if (isPendingAuthSession(authSession)) {
       await onCancelConnect()
     }
   }
@@ -368,24 +569,69 @@
     connectPromptSessionID = ''
   }
 
-  $: if (
-    showConnectPrompt &&
-    connectPromptSessionID === '' &&
-    authSession?.status === 'pending' &&
-    authSession?.sessionId
-  ) {
+  const handleGlobalPointerDown = (event: MouseEvent): void => {
+    if (!connectMenuOpen) {
+      return
+    }
+    const target = event.target as Node | null
+    if (target && connectMenuEl && !connectMenuEl.contains(target)) {
+      closeConnectMenu()
+    }
+  }
+
+  const handleGlobalKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      closeConnectMenu()
+    }
+  }
+
+  $: if (shouldAttachPendingSession(showConnectPrompt, connectPromptSessionID, authSession)) {
     connectPromptSessionID = authSession.sessionId
   }
 
-  $: if (
-    showConnectPrompt &&
-    connectPromptSessionID !== '' &&
-    authSession?.sessionId === connectPromptSessionID &&
-    authSession?.status === 'success'
-  ) {
+  $: if (shouldDismissPromptAfterSuccess(showConnectPrompt, connectPromptSessionID, authSession)) {
     showConnectPrompt = false
     connectPromptSessionID = ''
   }
+
+  $: if (shouldAttachPendingSession(showKiroConnectModal, kiroPromptSessionID, kiroAuthSession)) {
+    kiroPromptSessionID = kiroAuthSession?.sessionId || ''
+  }
+
+  $: if (shouldDismissPromptAfterSuccess(showKiroConnectModal, kiroPromptSessionID, kiroAuthSession)) {
+    showKiroConnectModal = false
+    kiroPromptSessionID = ''
+  }
+
+  $: if (!visibilityInitialized) {
+    showExhausted = readStoredBoolean(SHOW_EXHAUSTED_STORAGE_KEY, showExhaustedDefault)
+    showDisabled = readStoredBoolean(SHOW_DISABLED_STORAGE_KEY, showDisabledDefault)
+    visibilityInitialized = true
+  }
+
+  $: if (visibilityInitialized && typeof window !== 'undefined') {
+    if (!hasStoredBoolean(SHOW_EXHAUSTED_STORAGE_KEY)) {
+      showExhausted = showExhaustedDefault
+    }
+    if (!hasStoredBoolean(SHOW_DISABLED_STORAGE_KEY)) {
+      showDisabled = showDisabledDefault
+    }
+  }
+
+  $: if (typeof window !== 'undefined') {
+    window.localStorage.setItem(SHOW_EXHAUSTED_STORAGE_KEY, String(showExhausted))
+    window.localStorage.setItem(SHOW_DISABLED_STORAGE_KEY, String(showDisabled))
+  }
+
+  onMount(() => {
+    document.addEventListener('mousedown', handleGlobalPointerDown)
+    document.addEventListener('keydown', handleGlobalKeyDown)
+  })
+
+  onDestroy(() => {
+    document.removeEventListener('mousedown', handleGlobalPointerDown)
+    document.removeEventListener('keydown', handleGlobalKeyDown)
+  })
 </script>
 
 <div class="accounts-page space-y-4">
@@ -393,12 +639,26 @@
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
         <p class="text-sm font-semibold text-text-primary">Connect Account</p>
-        <p class="text-xs text-text-secondary">Use OAuth callback flow to add Codex-compatible accounts.</p>
+        <p class="text-xs text-text-secondary">Select provider first to avoid modal collisions (Codex OAuth or KiroAI device auth).</p>
       </div>
-      <Button on:click={handleStartConnect} disabled={authWorking} variant="primary" size="sm">
-        <Link2 size={14} class="mr-1" />
-        Connect Account
-      </Button>
+      <div class="connect-provider-menu" bind:this={connectMenuEl}>
+        <Button on:click={toggleConnectMenu} disabled={authWorking} variant="primary" size="sm" className="connect-provider-trigger">
+          <Link2 size={14} class="mr-1" />
+          Connect Account
+          <ChevronDown size={14} class={`connect-provider-chevron ${connectMenuOpen ? 'is-open' : ''}`} />
+        </Button>
+
+        {#if connectMenuOpen}
+          <div class="connect-provider-panel" role="menu" aria-label="Connect provider menu">
+            <button type="button" class="connect-provider-item" role="menuitem" on:click={() => void handleSelectConnectProvider('codex')}>
+              <span>Codex (OpenAI)</span>
+            </button>
+            <button type="button" class="connect-provider-item" role="menuitem" on:click={() => void handleSelectConnectProvider('kiro')}>
+              <span>KiroAI (Device Auth)</span>
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
 
     {#if authSession?.status === 'error'}
@@ -409,6 +669,18 @@
         </div>
         {#if authSession.error}
           <p class="mt-1 text-[11px] text-error">{authSession.error}</p>
+        {/if}
+      </div>
+    {/if}
+
+    {#if kiroAuthSession?.status === 'error'}
+      <div class="auth-session mt-3">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="session-pill status-error">error</span>
+          <span class="text-[11px] text-text-secondary">Kiro Session: {kiroAuthSession.sessionId || '-'}</span>
+        </div>
+        {#if kiroAuthSession.error}
+          <p class="mt-1 text-[11px] text-error">{kiroAuthSession.error}</p>
         {/if}
       </div>
     {/if}
@@ -424,15 +696,34 @@
           <p class="text-xs text-text-secondary">Total {formatNumber(accounts.length)} accounts in pool.</p>
         </div>
 
-        <div class="relative w-full lg:w-80">
-          <Search class="accounts-search-icon absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            on:input={handleSearchInput}
-            placeholder="Search by email, account ID, provider"
-            class="accounts-search-input w-full rounded-lg py-2 pl-9 pr-3 text-[13px] transition-colors"
-          />
+        <div class="flex w-full items-center gap-2 lg:w-auto">
+          <button
+            type="button"
+            class={`selection-btn tone-warning filter-toggle-btn ${showExhaustedDisabled ? '' : 'selection-btn-active'}`}
+            on:click={() => {
+              const nextVisibility = !showExhaustedDisabled
+              showExhausted = nextVisibility
+              showDisabled = nextVisibility
+            }}
+          >
+            <span>{exhaustedDisabledFilterLabel}</span>
+          </button>
+
+          <Button on:click={handleOpenImportPicker} disabled={bulkBusy} variant="secondary" size="sm" className="whitespace-nowrap">
+            <Upload size={14} class="mr-1" />
+            Import
+          </Button>
+
+          <div class="relative w-full lg:w-80">
+            <Search class="accounts-search-icon absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              on:input={handleSearchInput}
+              placeholder="Search by email, account ID, provider"
+              class="accounts-search-input ui-control-input ui-control-select-sm w-full bg-surface py-2 pl-9 pr-3 text-[13px]"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -445,6 +736,7 @@
       {selectedEnabledCount}
       {hasVisibleAccounts}
       {allVisibleSelected}
+      {bannedCount}
       {view}
       {refreshingAllQuotas}
       {bulkBusy}
@@ -456,10 +748,12 @@
       }}
       on:toggleSelectAllVisible={handleToggleSelectAllVisible}
       on:refreshAllQuotas={onRefreshAllQuotas}
-      on:importAccounts={handleOpenImportPicker}
-      on:bulkTogglePower={handleBulkTogglePower}
+      on:forceRefreshAllQuotas={handleForceRefreshAllQuotas}
+      on:bulkEnable={handleBulkEnable}
+      on:bulkDisable={handleBulkDisable}
       on:bulkExport={handleBulkExport}
       on:bulkDelete={handleBulkDelete}
+      on:bulkDeleteBanned={handleDeleteBannedAccounts}
     />
 
     {#if filteredAccounts.length === 0}
@@ -486,8 +780,8 @@
       <AccountsTable
         accounts={filteredAccounts}
         {selectedIds}
-        {allVisibleSelected}
         {busyAccountIds}
+        {allVisibleSelected}
         refreshingAccountID={refreshingAccount}
         {confirmRemoveAccountID}
         actionAccountID={actionAccount}
@@ -509,12 +803,31 @@
     open={showConnectPrompt}
     authUrl={authSession?.authUrl || ''}
     busy={authWorking}
-    pending={isPendingAuth(authSession)}
-    canCopyLink={canCopyAuthLink()}
+    pending={isPendingAuthSession(authSession)}
+    canCopyLink={hasClipboardWrite()}
     on:openLink={handleOpenAuthLink}
     on:copyLink={handleCopyAuthLink}
     on:dismiss={handleDismissModal}
     on:cancel={handleCancelFromModal}
+  />
+
+  <KiroConnectModal
+    open={showKiroConnectModal}
+    authUrl={kiroAuthSession?.authUrl || ''}
+    userCode={kiroAuthSession?.userCode || ''}
+    authMethod={kiroAuthSession?.authMethod || ''}
+    provider={kiroAuthSession?.provider || ''}
+    busy={authWorking}
+    pending={isPendingAuthSession(kiroAuthSession)}
+    canCopyLink={hasClipboardWrite()}
+    on:startDevice={handleStartKiroDeviceAuth}
+    on:startGoogle={handleStartKiroGoogleAuth}
+    on:startGitHub={handleStartKiroGitHubAuth}
+    on:openLink={handleOpenKiroAuthLink}
+    on:copyLink={handleCopyKiroAuthLink}
+    on:copyCode={handleCopyKiroUserCode}
+    on:dismiss={handleDismissKiroModal}
+    on:cancel={handleCancelKiroModal}
   />
 
   <AccountDetailModal open={Boolean(detailAccount)} account={detailAccount} on:dismiss={closeDetailModal} />
@@ -534,7 +847,23 @@
     open={showBulkDeleteModal}
     count={selectedIds.length}
     busy={bulkBusy}
+    title="Delete Selected Accounts"
+    description="This action will remove selected records from local storage."
+    summaryLabel="selected account(s)"
+    confirmLabel="Delete Selected"
     on:cancel={handleCancelBulkDelete}
     on:confirm={handleConfirmBulkDelete}
+  />
+
+  <BatchDeleteModal
+    open={showBannedDeleteModal}
+    count={bannedCount}
+    busy={bulkBusy}
+    title="Delete Banned Accounts"
+    description="This action removes all accounts explicitly marked as banned."
+    summaryLabel="banned account(s)"
+    confirmLabel="Delete Banned"
+    on:cancel={handleCancelDeleteBanned}
+    on:confirm={handleConfirmDeleteBanned}
   />
 </div>

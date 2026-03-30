@@ -1,12 +1,16 @@
-import type { AuthSession } from '@/services/wails-api'
+export interface SessionLike {
+  sessionId: string
+  status: string
+  error?: string
+}
 
-export interface AuthSessionControllerOptions {
+export interface AuthSessionControllerOptions<T extends SessionLike> {
   intervalMs?: number
   transientRetryLimit?: number
-  getSession: (sessionId: string) => Promise<AuthSession>
-  onSession: (session: AuthSession) => void
-  onSuccess: (session: AuthSession) => Promise<void> | void
-  onSessionError: (session: AuthSession) => void
+  getSession: (sessionId: string) => Promise<T>
+  onSession: (session: T) => void
+  onSuccess: (session: T) => Promise<void> | void
+  onSessionError: (session: T) => void
   onPollingError: (error: unknown) => void
 }
 
@@ -16,7 +20,9 @@ export interface AuthSessionController {
   poll: (sessionId: string) => Promise<void>
 }
 
-export const createAuthSessionController = (options: AuthSessionControllerOptions): AuthSessionController => {
+export const createAuthSessionController = <T extends SessionLike>(
+  options: AuthSessionControllerOptions<T>
+): AuthSessionController => {
   const intervalMs = options.intervalMs ?? 1500
   const transientRetryLimit = options.transientRetryLimit ?? 3
 

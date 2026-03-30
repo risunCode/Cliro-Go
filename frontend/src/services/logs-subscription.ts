@@ -1,7 +1,7 @@
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import type { LogEntry } from '@/services/wails-api'
 
-export const appendLogEntryWithLimit = (entries: LogEntry[], entry: LogEntry, limit = 1000): LogEntry[] => {
+const appendLogEntryWithLimit = (entries: LogEntry[], entry: LogEntry, limit = 1000): LogEntry[] => {
   return [...entries, entry].slice(-limit)
 }
 

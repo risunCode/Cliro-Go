@@ -20,7 +20,7 @@
 <div
   aria-atomic="true"
   aria-live="polite"
-  class="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[20rem] max-w-[calc(100vw-1.5rem)] flex-col gap-2.5 sm:bottom-6 sm:right-6"
+  class="toast-viewport pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[20rem] max-w-[calc(100vw-1.5rem)] flex-col gap-2.5 sm:bottom-6 sm:right-6"
 >
   {#each $toastStore as toast (toast.id)}
     <div
@@ -63,64 +63,3 @@
     </div>
   {/each}
 </div>
-
-<style>
-  :global(.toast-card) {
-    color: var(--color-text-primary);
-    border-color: color-mix(in srgb, var(--color-border) 82%, var(--toast-accent) 18%);
-    background-color: color-mix(in srgb, var(--color-surface) 94%, var(--toast-accent) 6%);
-  }
-
-  :global(.toast-card[data-type='success']) {
-    --toast-accent: var(--color-success);
-  }
-
-  :global(.toast-card[data-type='error']) {
-    --toast-accent: var(--color-error);
-  }
-
-  :global(.toast-card[data-type='info']) {
-    --toast-accent: var(--color-info);
-  }
-
-  :global(.toast-card[data-type='warning']) {
-    --toast-accent: var(--color-warning);
-  }
-
-  .toast-accent {
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 3px;
-    background: color-mix(in srgb, var(--toast-accent) 58%, transparent);
-  }
-
-  .toast-type {
-    color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--toast-accent) 28%);
-  }
-
-  .toast-progress-track {
-    height: 3px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--color-border) 70%, transparent);
-  }
-
-  .toast-progress {
-    width: 100%;
-    height: 100%;
-    background: color-mix(in srgb, var(--toast-accent) 38%, transparent);
-    animation: toast-countdown var(--toast-duration) linear forwards;
-  }
-
-  @keyframes toast-countdown {
-    from {
-      transform: translateX(0%);
-    }
-
-    to {
-      transform: translateX(-100%);
-    }
-  }
-</style>

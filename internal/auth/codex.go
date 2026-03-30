@@ -30,9 +30,8 @@ const (
 	oauthRedirectURI    = "http://localhost:1455/auth/callback"
 	oauthCallbackAddr   = "127.0.0.1:1455"
 	defaultOAuthTimeout = 15 * time.Minute
-	refreshSkew         = 5 * time.Minute
 	codexVersion        = "0.117.0"
-	codexUserAgent      = "codex_cli_rs/0.117.0 (Windows NT 10.0; Win64; x64)"
+	codexUserAgent      = "codex_cli_rs/0.117.0 (Macintosh; Intel Mac OS X 10_15_7)"
 )
 
 type SessionStatus string
@@ -66,6 +65,7 @@ type Manager struct {
 	client         *http.Client
 	mu             sync.RWMutex
 	oauthSessions  map[string]*oauthSession
+	kiroSessions   map[string]*kiroAuthSession
 	callbackServer *http.Server
 }
 
@@ -96,17 +96,45 @@ type jwtClaims struct {
 }
 
 func NewManager(store *config.Manager, log *logger.Logger) *Manager {
+	timeout := 60 * time.Second
+
 	return &Manager{
 		store:         store,
 		log:           log,
-		client:        &http.Client{Timeout: 60 * time.Second},
+		client:        &http.Client{Timeout: timeout},
 		oauthSessions: map[string]*oauthSession{},
+		kiroSessions:  map[string]*kiroAuthSession{},
 	}
+}
+
+func (m *Manager) httpClient() *http.Client {
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client != nil {
+		return client
+	}
+	return &http.Client{Timeout: 60 * time.Second}
+}
+
+func (m *Manager) SetHTTPTimeout(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.client = &http.Client{Timeout: timeout}
 }
 
 func (m *Manager) Shutdown(ctx context.Context) error {
 	m.mu.Lock()
 	for _, session := range m.oauthSessions {
+		if session.cancel != nil {
+			session.cancel()
+		}
+	}
+	for _, session := range m.kiroSessions {
 		if session.cancel != nil {
 			session.cancel()
 		}
@@ -279,7 +307,7 @@ func (m *Manager) exchangeAuthorizationCodeWithRedirect(ctx context.Context, cod
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := m.client.Do(req)
+	resp, err := m.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +482,7 @@ func (m *Manager) accountFromTokens(tokens *tokenExchangeResponse) (config.Accou
 
 func (m *Manager) upsertCodexAccount(account *config.Account) error {
 	for _, existing := range m.store.Accounts() {
-		if existing.Provider != "" && existing.Provider != "codex" {
+		if !strings.EqualFold(strings.TrimSpace(existing.Provider), "codex") {
 			continue
 		}
 		matchAccountID := existing.AccountID != "" && account.AccountID != "" && existing.AccountID == account.AccountID
@@ -485,14 +513,30 @@ func (m *Manager) RefreshAccount(accountID string) (config.Account, error) {
 	if !ok {
 		return config.Account{}, fmt.Errorf("account not found")
 	}
+	switch strings.ToLower(strings.TrimSpace(account.Provider)) {
+	case "codex":
+		return m.refreshCodexAccount(account, true)
+	case "kiro":
+		return m.refreshKiroAccount(account, true)
+	default:
+		return account, fmt.Errorf("refresh account only supports provider codex or kiro")
+	}
+}
+
+func (m *Manager) refreshCodexAccount(account config.Account, force bool) (config.Account, error) {
+	if !force && !accountTokenExpired(account, time.Now()) {
+		return account, nil
+	}
 	if strings.TrimSpace(account.RefreshToken) == "" {
 		return account, fmt.Errorf("account has no refresh token")
 	}
 	tokens, err := m.refreshTokens(context.Background(), account.RefreshToken)
 	if err != nil {
 		if blockedMsg, blocked := blockedAccountMessageFromAuthError(err); blocked {
-			_ = m.store.UpdateAccount(accountID, func(a *config.Account) {
+			_ = m.store.UpdateAccount(account.ID, func(a *config.Account) {
 				a.Enabled = false
+				a.Banned = true
+				a.BannedReason = blockedMsg
 				a.LastError = blockedMsg
 			})
 		}
@@ -503,7 +547,7 @@ func (m *Manager) RefreshAccount(accountID string) (config.Account, error) {
 	if err != nil {
 		return account, err
 	}
-	err = m.store.UpdateAccount(accountID, func(a *config.Account) {
+	err = m.store.UpdateAccount(account.ID, func(a *config.Account) {
 		a.Provider = "codex"
 		a.AccessToken = tokens.AccessToken
 		if strings.TrimSpace(tokens.RefreshToken) != "" {
@@ -518,44 +562,83 @@ func (m *Manager) RefreshAccount(accountID string) (config.Account, error) {
 		a.AccountID = claims.CodexAuthInfo.ChatgptAccountID
 		a.PlanType = strings.TrimSpace(claims.CodexAuthInfo.ChatgptPlanType)
 		a.LastRefresh = time.Now().Unix()
+		a.HealthState = config.AccountHealthReady
+		a.HealthReason = ""
+		a.Banned = false
+		a.BannedReason = ""
+		a.CooldownUntil = 0
+		a.ConsecutiveFailures = 0
 		a.LastError = ""
 	})
 	if err != nil {
 		return account, err
 	}
-	refreshed, _ := m.store.GetAccount(accountID)
+	refreshed, _ := m.store.GetAccount(account.ID)
 	m.log.Info("auth", "refreshed token for "+refreshed.Email)
 	return refreshed, nil
+}
+
+func (m *Manager) refreshKiroAccount(account config.Account, force bool) (config.Account, error) {
+	if !force && !accountTokenExpired(account, time.Now()) {
+		return account, nil
+	}
+	if strings.TrimSpace(account.RefreshToken) == "" {
+		return account, fmt.Errorf("account has no refresh token")
+	}
+	if (strings.TrimSpace(account.ClientID) == "" || strings.TrimSpace(account.ClientSecret) == "") && !looksLikeKiroSocialRefreshToken(account.RefreshToken) {
+		return account, fmt.Errorf("kiro account missing client credentials; reconnect account")
+	}
+
+	tokens, err := m.refreshKiroTokens(context.Background(), account.ClientID, account.ClientSecret, account.RefreshToken)
+	if err != nil {
+		if blockedMsg, blocked := blockedAccountMessageFromAuthError(err); blocked {
+			_ = m.store.MarkAccountBanned(account.ID, blockedMsg)
+		}
+		m.log.Error("auth", "kiro refresh failed for "+account.Email+": "+err.Error())
+		return account, err
+	}
+
+	err = m.store.UpdateAccount(account.ID, func(a *config.Account) {
+		a.Provider = "kiro"
+		a.AccessToken = tokens.AccessToken
+		if strings.TrimSpace(tokens.RefreshToken) != "" {
+			a.RefreshToken = tokens.RefreshToken
+		}
+		a.ClientID = firstNonEmpty(strings.TrimSpace(tokens.ClientID), strings.TrimSpace(a.ClientID))
+		a.ClientSecret = firstNonEmpty(strings.TrimSpace(tokens.ClientSecret), strings.TrimSpace(a.ClientSecret))
+		if strings.TrimSpace(tokens.ProfileARN) != "" {
+			a.AccountID = strings.TrimSpace(tokens.ProfileARN)
+		}
+		if strings.TrimSpace(tokens.Email) != "" {
+			a.Email = strings.TrimSpace(tokens.Email)
+		}
+		a.ExpiresAt = time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second).Unix()
+		a.LastRefresh = time.Now().Unix()
+		a.HealthState = config.AccountHealthReady
+		a.HealthReason = ""
+		a.LastError = ""
+		a.Banned = false
+		a.BannedReason = ""
+		a.CooldownUntil = 0
+		a.ConsecutiveFailures = 0
+	})
+	if err != nil {
+		return account, err
+	}
+	refreshed, _ := m.store.GetAccount(account.ID)
+	m.log.Info("auth", "refreshed Kiro token for "+refreshed.Email)
+	return refreshed, nil
+}
+
+func looksLikeKiroSocialRefreshToken(refreshToken string) bool {
+	return strings.HasPrefix(strings.TrimSpace(refreshToken), "aorAAAAAG")
 }
 
 func blockedAccountMessageFromAuthError(err error) (string, bool) {
 	if err == nil {
 		return "", false
 	}
-
-	message := strings.TrimSpace(err.Error())
-	if message == "" {
-		return "", false
-	}
-
-	normalized := strings.ToLower(message)
-	blockIndicators := []string{
-		"deactivated",
-		"banned",
-		"suspended",
-		"forbidden",
-		"disabled by",
-		"terminated",
-		"closed",
-	}
-
-	for _, indicator := range blockIndicators {
-		if strings.Contains(normalized, indicator) {
-			return message, true
-		}
-	}
-
-	return "", false
+	return config.BlockedAccountReason(err.Error())
 }
 
 func (m *Manager) EnsureFreshAccount(accountID string) (config.Account, error) {
@@ -563,10 +646,28 @@ func (m *Manager) EnsureFreshAccount(accountID string) (config.Account, error) {
 	if !ok {
 		return config.Account{}, fmt.Errorf("account not found")
 	}
-	if account.ExpiresAt == 0 || time.Now().Unix() < account.ExpiresAt-int64(refreshSkew.Seconds()) {
+	switch strings.ToLower(strings.TrimSpace(account.Provider)) {
+	case "codex", "kiro":
+		if !accountTokenExpired(account, time.Now()) {
+			return account, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(account.Provider)) {
+		case "codex":
+			return m.refreshCodexAccount(account, false)
+		case "kiro":
+			return m.refreshKiroAccount(account, false)
+		}
 		return account, nil
+	default:
+		return account, fmt.Errorf("ensure fresh account only supports provider codex or kiro")
 	}
-	return m.RefreshAccount(accountID)
+}
+
+func accountTokenExpired(account config.Account, now time.Time) bool {
+	if account.ExpiresAt <= 0 {
+		return false
+	}
+	return now.Unix() >= account.ExpiresAt
 }
 
 func (m *Manager) refreshTokens(ctx context.Context, refreshToken string) (*tokenExchangeResponse, error) {
@@ -582,7 +683,7 @@ func (m *Manager) refreshTokens(ctx context.Context, refreshToken string) (*toke
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	resp, err := m.client.Do(req)
+	resp, err := m.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}

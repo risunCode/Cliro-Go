@@ -7,17 +7,29 @@ import {main} from '../models';
 
 export function CancelCodexAuth(arg1:string):Promise<void>;
 
+export function CancelKiroAuth(arg1:string):Promise<void>;
+
 export function ClearCooldown(arg1:string):Promise<void>;
 
 export function ClearLogs():Promise<void>;
 
 export function DeleteAccount(arg1:string):Promise<void>;
 
+export function ForceRefreshAllQuotas():Promise<void>;
+
 export function GetAccounts():Promise<Array<config.Account>>;
+
+export function GetCLISyncFileContent(arg1:string,arg2:string):Promise<string>;
+
+export function GetCLISyncStatuses():Promise<Array<Record<string, any>>>;
 
 export function GetCodexAuthSession(arg1:string):Promise<auth.CodexAuthSessionView>;
 
 export function GetHostName():Promise<string>;
+
+export function GetKiroAuthSession(arg1:string):Promise<auth.KiroAuthSessionView>;
+
+export function GetLocalModelCatalog():Promise<Array<Record<string, any>>>;
 
 export function GetLogs(arg1:number):Promise<Array<logger.Entry>>;
 
@@ -27,27 +39,59 @@ export function GetState():Promise<main.State>;
 
 export function ImportAccounts(arg1:Array<config.Account>):Promise<number>;
 
+export function InstallCloudflared():Promise<void>;
+
 export function OpenDataDir():Promise<void>;
 
 export function OpenExternalURL(arg1:string):Promise<void>;
 
 export function RefreshAccount(arg1:string):Promise<void>;
 
+export function RefreshAccountWithQuota(arg1:string):Promise<void>;
+
 export function RefreshAllQuotas():Promise<void>;
+
+export function RefreshCloudflaredStatus():Promise<Record<string, any>>;
 
 export function RefreshQuota(arg1:string):Promise<void>;
 
+export function RegenerateProxyAPIKey():Promise<string>;
+
+export function SaveCLISyncFileContent(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SetAllowLAN(arg1:boolean):Promise<void>;
+
+export function SetAuthorizationMode(arg1:boolean):Promise<void>;
 
 export function SetAutoStartProxy(arg1:boolean):Promise<void>;
 
+export function SetCircuitBreaker(arg1:boolean):Promise<void>;
+
+export function SetCircuitSteps(arg1:Array<number>):Promise<void>;
+
+export function SetCloudflaredConfig(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function SetProxyAPIKey(arg1:string):Promise<void>;
+
 export function SetProxyPort(arg1:number):Promise<void>;
+
+export function SetSchedulingMode(arg1:string):Promise<void>;
+
+export function StartCloudflared():Promise<void>;
 
 export function StartCodexAuth():Promise<auth.CodexAuthStart>;
 
+export function StartKiroAuth():Promise<auth.KiroAuthStart>;
+
+export function StartKiroSocialAuth(arg1:string):Promise<auth.KiroAuthStart>;
+
 export function StartProxy():Promise<void>;
 
+export function StopCloudflared():Promise<void>;
+
 export function StopProxy():Promise<void>;
+
+export function SyncCLIConfig(arg1:string,arg2:string):Promise<Record<string, any>>;
 
 export function SyncCodexAccountToCodexCLI(arg1:string):Promise<auth.CodexAuthSyncResult>;
 

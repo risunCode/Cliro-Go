@@ -19,7 +19,6 @@ export let actionAccountID = ''
   export let onConfirmRemove: (accountID: string) => Promise<void>
   export let onCancelRemove: () => void
 
-  const isBusy = (accountID: string): boolean => busyAccountIds.includes(accountID)
 </script>
 
 <div class="account-grid">
@@ -27,7 +26,7 @@ export let actionAccountID = ''
     <AccountCard
       {account}
       selected={selectedIds.includes(account.id)}
-      busy={isBusy(account.id)}
+      busy={busyAccountIds.includes(account.id)}
       refreshing={refreshingAccountID === account.id}
       confirmingDelete={confirmRemoveAccountID === account.id}
       deleteInProgress={actionAccountID === account.id}

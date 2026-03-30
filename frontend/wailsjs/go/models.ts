@@ -94,6 +94,64 @@ export namespace auth {
 	        this.syncedExpiresAt = source["syncedExpiresAt"];
 	    }
 	}
+	export class KiroAuthSessionView {
+	    sessionId: string;
+	    authUrl: string;
+	    verificationUrl?: string;
+	    userCode?: string;
+	    expiresAt?: number;
+	    status: string;
+	    error?: string;
+	    accountId?: string;
+	    email?: string;
+	    authMethod?: string;
+	    provider?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KiroAuthSessionView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.authUrl = source["authUrl"];
+	        this.verificationUrl = source["verificationUrl"];
+	        this.userCode = source["userCode"];
+	        this.expiresAt = source["expiresAt"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.accountId = source["accountId"];
+	        this.email = source["email"];
+	        this.authMethod = source["authMethod"];
+	        this.provider = source["provider"];
+	    }
+	}
+	export class KiroAuthStart {
+	    sessionId: string;
+	    authUrl: string;
+	    verificationUrl?: string;
+	    userCode: string;
+	    expiresAt?: number;
+	    status: string;
+	    authMethod?: string;
+	    provider?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KiroAuthStart(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.authUrl = source["authUrl"];
+	        this.verificationUrl = source["verificationUrl"];
+	        this.userCode = source["userCode"];
+	        this.expiresAt = source["expiresAt"];
+	        this.status = source["status"];
+	        this.authMethod = source["authMethod"];
+	        this.provider = source["provider"];
+	    }
+	}
 	export class OpencodeAuthSyncResult {
 	    targetPath: string;
 	    fileExisted: boolean;
@@ -199,9 +257,17 @@ export namespace config {
 	    accessToken: string;
 	    refreshToken: string;
 	    idToken?: string;
+	    clientId?: string;
+	    clientSecret?: string;
 	    expiresAt?: number;
 	    enabled: boolean;
+	    banned?: boolean;
+	    bannedReason?: string;
+	    healthState?: string;
+	    healthReason?: string;
 	    cooldownUntil?: number;
+	    lastFailureAt?: number;
+	    consecutiveFailures?: number;
 	    lastError?: string;
 	    requestCount?: number;
 	    errorCount?: number;
@@ -228,9 +294,17 @@ export namespace config {
 	        this.accessToken = source["accessToken"];
 	        this.refreshToken = source["refreshToken"];
 	        this.idToken = source["idToken"];
+	        this.clientId = source["clientId"];
+	        this.clientSecret = source["clientSecret"];
 	        this.expiresAt = source["expiresAt"];
 	        this.enabled = source["enabled"];
+	        this.banned = source["banned"];
+	        this.bannedReason = source["bannedReason"];
+	        this.healthState = source["healthState"];
+	        this.healthReason = source["healthReason"];
 	        this.cooldownUntil = source["cooldownUntil"];
+	        this.lastFailureAt = source["lastFailureAt"];
+	        this.consecutiveFailures = source["consecutiveFailures"];
 	        this.lastError = source["lastError"];
 	        this.requestCount = source["requestCount"];
 	        this.errorCount = source["errorCount"];
@@ -286,6 +360,25 @@ export namespace config {
 	    }
 	}
 	
+	
+	export class StartupWarning {
+	    code: string;
+	    filePath: string;
+	    backupPath?: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StartupWarning(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.filePath = source["filePath"];
+	        this.backupPath = source["backupPath"];
+	        this.message = source["message"];
+	    }
+	}
 
 }
 
@@ -321,10 +414,16 @@ export namespace main {
 	    proxyBindAddress: string;
 	    allowLan: boolean;
 	    autoStartProxy: boolean;
+	    proxyApiKey?: string;
+	    authorizationMode?: boolean;
+	    schedulingMode?: string;
+	    circuitBreaker?: boolean;
+	    circuitSteps?: number[];
 	    proxyRunning: boolean;
 	    availableCount: number;
 	    accounts: config.Account[];
 	    stats: config.ProxyStats;
+	    startupWarnings?: config.StartupWarning[];
 	
 	    static createFrom(source: any = {}) {
 	        return new State(source);
@@ -338,10 +437,16 @@ export namespace main {
 	        this.proxyBindAddress = source["proxyBindAddress"];
 	        this.allowLan = source["allowLan"];
 	        this.autoStartProxy = source["autoStartProxy"];
+	        this.proxyApiKey = source["proxyApiKey"];
+	        this.authorizationMode = source["authorizationMode"];
+	        this.schedulingMode = source["schedulingMode"];
+	        this.circuitBreaker = source["circuitBreaker"];
+	        this.circuitSteps = source["circuitSteps"];
 	        this.proxyRunning = source["proxyRunning"];
 	        this.availableCount = source["availableCount"];
 	        this.accounts = this.convertValues(source["accounts"], config.Account);
 	        this.stats = this.convertValues(source["stats"], config.ProxyStats);
+	        this.startupWarnings = this.convertValues(source["startupWarnings"], config.StartupWarning);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -2,7 +2,7 @@ import { writable } from 'svelte/store'
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'
 
-export interface ToastItem {
+interface ToastItem {
   id: number
   type: ToastType
   title: string
@@ -13,13 +13,14 @@ export interface ToastItem {
 const createToastStore = () => {
   const { subscribe, update } = writable<ToastItem[]>([])
   let toastId = 0
-  const maxVisibleToasts = 3
+  const maxVisibleToasts = 2
+  const defaultDuration = 2000
 
   const push = (
     type: ToastType,
     title: string,
     message: string,
-    duration = 3800
+    duration = defaultDuration
   ): number => {
     toastId += 1
     const id = toastId

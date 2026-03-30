@@ -17,7 +17,7 @@
   }
 </script>
 
-<div class="flex items-center justify-between gap-3 rounded-sm border border-border bg-app px-3 py-2 text-xs text-text-secondary">
+<div class="ui-toggle-switch flex items-center justify-between gap-3 rounded-sm border border-border bg-app px-3 py-2 text-xs text-text-secondary">
   <span>{label}</span>
   <button
     type="button"
@@ -37,18 +37,3 @@
     />
   </button>
 </div>
-
-<style>
-  .toggle-track-checked {
-    border-color: color-mix(in srgb, var(--accent-primary) 70%, var(--color-border));
-    background-color: color-mix(in srgb, var(--accent-primary) 42%, var(--color-surface));
-  }
-
-  .toggle-thumb {
-    background-color: color-mix(in srgb, var(--color-surface) 84%, var(--color-text-primary));
-  }
-
-  .toggle-track-checked .toggle-thumb {
-    background-color: color-mix(in srgb, var(--color-bg) 88%, var(--color-surface));
-  }
-</style>

@@ -1,0 +1,2477 @@
+/* ========================================================================== */
+/* ================= CORE: TAILWIND + TOKENS + BASE + UI PRIMITIVES ================= */
+/* ========================================================================== */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: local(''), url('assets/fonts/Outfit-VariableFont_wght.ttf') format('truetype');
+}
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f0f0;
+  --accent-primary: #e85d4a;
+  --accent-secondary: #f97316;
+  --text-primary: #1a1a1a;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #d97706;
+  --info: #1d4ed8;
+  --border-color: #e5e5e5;
+  --glass-bg: rgba(0, 0, 0, 0.02);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --modal-overlay: rgba(15, 23, 42, 0.22);
+  --modal-overlay-blur: 4px;
+
+  --color-bg: var(--bg-primary);
+  --color-surface: var(--bg-card);
+  --color-border: var(--border-color);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --radius-base: 12px;
+  --radius-small: 8px;
+  --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-medium: 0 8px 24px rgba(15, 23, 42, 0.12);
+  color-scheme: light;
+}
+
+:root[data-theme='light'] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f0f0f0;
+  --accent-primary: #e85d4a;
+  --accent-secondary: #f97316;
+  --text-primary: #1a1a1a;
+  --text-secondary: #525252;
+  --text-muted: #737373;
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #d97706;
+  --info: #1d4ed8;
+  --border-color: #e5e5e5;
+  --glass-bg: rgba(0, 0, 0, 0.02);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --modal-overlay: rgba(15, 23, 42, 0.22);
+  --modal-overlay-blur: 4px;
+  --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-medium: 0 8px 24px rgba(15, 23, 42, 0.12);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-card: #1c2128;
+  --bg-card-hover: #252c35;
+  --accent-primary: #ff7b59;
+  --accent-secondary: #ff9f7a;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --success: #3fb950;
+  --error: #f85149;
+  --warning: #d29922;
+  --info: #58a6ff;
+  --border-color: #30363d;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --modal-overlay: rgba(2, 6, 14, 0.62);
+  --modal-overlay-blur: 8px;
+  --shadow-soft: 0 2px 8px rgba(2, 6, 23, 0.28);
+  --shadow-medium: 0 8px 24px rgba(2, 6, 23, 0.45);
+  color-scheme: dark;
+}
+
+:root[data-theme='solarized'] {
+  --bg-primary: #fdf6e3;
+  --bg-secondary: #eee8d5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5f0e1;
+  --accent-primary: #d94f3d;
+  --accent-secondary: #e85d04;
+  --text-primary: #1c1917;
+  --text-secondary: #3f3f46;
+  --text-muted: #52525b;
+  --success: #16a34a;
+  --error: #dc2626;
+  --warning: #b45309;
+  --info: #1d4ed8;
+  --border-color: #d6d3d1;
+  --glass-bg: rgba(28, 25, 23, 0.03);
+  --glass-border: rgba(28, 25, 23, 0.12);
+  --modal-overlay: rgba(66, 52, 28, 0.24);
+  --modal-overlay-blur: 3px;
+  --shadow-soft: 0 2px 8px rgba(66, 52, 28, 0.12);
+  --shadow-medium: 0 8px 24px rgba(66, 52, 28, 0.18);
+  color-scheme: light;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: 'Outfit', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#app {
+  height: 100%;
+}
+
+input,
+textarea,
+select,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@layer components {
+  .ui-surface-card {
+    @apply rounded-base border border-border bg-surface shadow-soft;
+  }
+
+  .ui-btn-base {
+    @apply inline-flex items-center justify-center rounded-sm border text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .ui-btn-primary {
+    @apply border-border bg-text-primary text-surface hover:opacity-90;
+  }
+
+  .ui-btn-secondary {
+    @apply border-border text-text-secondary hover:bg-app hover:text-text-primary;
+  }
+
+  .ui-btn-ghost {
+    @apply border-transparent text-text-secondary hover:bg-app hover:text-text-primary;
+  }
+
+  .ui-btn-danger {
+    color: #ffffff;
+    border-color: color-mix(in srgb, var(--color-error) 70%, var(--color-border));
+    background-color: var(--color-error);
+  }
+
+  .ui-btn-danger:hover {
+    background-color: color-mix(in srgb, var(--color-error) 88%, #000000);
+  }
+
+  .ui-status-badge {
+    @apply inline-flex items-center rounded-sm px-2 py-1 text-xs font-semibold;
+  }
+
+  .ui-status-badge-neutral {
+    @apply bg-app text-text-secondary;
+  }
+
+  .ui-status-badge-success {
+    color: var(--color-success);
+    background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+  }
+
+  .ui-status-badge-error {
+    color: var(--color-error);
+    background-color: color-mix(in srgb, var(--color-error) 15%, transparent);
+  }
+
+  .ui-status-badge-info {
+    color: var(--color-info);
+    background-color: color-mix(in srgb, var(--color-info) 15%, transparent);
+  }
+
+  .ui-status-badge-warning {
+    color: var(--color-warning);
+    background-color: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  }
+
+  .ui-icon-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    padding: 0;
+    border-width: 1px;
+    border-radius: 6px;
+    border-color: color-mix(in srgb, var(--color-border) 88%, var(--color-text-secondary));
+    background-color: var(--color-surface);
+    color: var(--color-text-secondary);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-surface) 78%, transparent);
+  }
+
+  .ui-icon-btn:hover {
+    border-color: color-mix(in srgb, var(--color-text-secondary) 42%, var(--color-border));
+    background-color: color-mix(in srgb, var(--bg-secondary) 80%, var(--color-surface));
+    color: var(--color-text-primary);
+  }
+
+  .ui-icon-btn-active {
+    border-color: #8b5cf6;
+    color: #6d28d9;
+    background-color: color-mix(in srgb, #8b5cf6 13%, var(--color-surface));
+  }
+
+  .ui-icon-btn-danger {
+    border-color: color-mix(in srgb, var(--color-error) 55%, var(--color-border));
+    color: var(--color-error);
+    background-color: color-mix(in srgb, var(--color-error) 5%, var(--color-surface));
+  }
+
+  .ui-icon-btn-danger:hover {
+    border-color: color-mix(in srgb, var(--color-error) 65%, var(--color-border));
+    background-color: color-mix(in srgb, var(--color-error) 14%, var(--color-surface));
+    color: color-mix(in srgb, var(--color-error) 88%, #000000);
+  }
+
+  .ui-control-input {
+    width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .ui-control-input:focus {
+    border-color: color-mix(in srgb, var(--color-text-secondary) 62%, var(--color-border));
+  }
+
+  .ui-control-select {
+    min-height: 2.5rem;
+    padding: 0 0.7rem;
+    font-size: 0.84rem;
+  }
+
+  .ui-control-select-sm {
+    min-height: 2rem;
+    border-radius: 6px;
+    padding: 0 0.55rem;
+    font-size: 12px;
+  }
+
+  .ui-control-textarea {
+    min-height: 12rem;
+    padding: 0.7rem;
+    font-size: 0.78rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    resize: vertical;
+  }
+
+  .ui-inline-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ui-panel-soft {
+    --ui-panel-radius: 0.75rem;
+    --ui-panel-bg: color-mix(in srgb, var(--color-app) 72%, transparent);
+    --ui-panel-border-color: var(--color-border);
+
+    border: 1px solid var(--ui-panel-border-color);
+    border-radius: var(--ui-panel-radius);
+    background: var(--ui-panel-bg);
+  }
+
+  .ui-panel-dashed {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--color-border) 92%, var(--color-text-secondary));
+  }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ========================================================================== */
+/* ================= TAB: DASHBOARD ================= */
+/* ========================================================================== */
+
+/* Reserved for dashboard-specific global rules. */
+
+/* ========================================================================== */
+/* ================= TAB: API ROUTER ================= */
+/* ========================================================================== */
+
+.api-cli-sync {
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 3%, transparent), transparent),
+    var(--color-surface);
+  overflow: hidden;
+}
+
+.api-cli-sync-header {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.api-cli-sync-header:hover,
+.api-cli-sync-header:focus-visible {
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-bg));
+  outline: none;
+}
+
+.api-cli-sync-left {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.api-cli-sync-icon-wrap {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, var(--color-text-secondary));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-app) 82%, transparent);
+  flex-shrink: 0;
+}
+
+.api-cli-sync-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.api-cli-sync-header-right {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.api-cli-sync-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.api-cli-sync-title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.api-cli-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, var(--accent-primary));
+  border-radius: 999px;
+  padding: 0.08rem 0.45rem;
+  font-size: 10px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--accent-primary) 11%, var(--color-surface));
+}
+
+.api-cli-sync-subtitle {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.api-cli-sync-chevron {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.api-cli-sync-body {
+  padding: 0 0.9rem 0.9rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+}
+
+.api-cli-sync-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.api-cli-sync-tool {
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.api-cli-sync-tool-name {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.api-cli-sync-tool-status {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+}
+
+.api-cli-sync-tool-btn {
+  margin-top: 0.25rem;
+  width: fit-content;
+  padding: 0.3rem 0.55rem;
+  border-radius: 0.5rem;
+  font-size: 0.76rem;
+}
+
+.api-cli-sync-tool-btn:disabled {
+  opacity: 0.55;
+}
+
+.api-cli-sync-note {
+  margin: 0.7rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.api-endpoint-body {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.api-endpoint-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.api-endpoint-panel {
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.api-endpoint-controls {
+  min-width: 0;
+}
+
+.api-endpoint-select {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.api-endpoint-run {
+  height: 2.5rem;
+  flex: 0 0 auto;
+}
+
+.api-endpoint-request {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.api-endpoint-label {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.api-endpoint-textarea {
+  width: 100%;
+}
+
+.api-endpoint-response {
+  max-height: 20rem;
+  overflow: auto;
+  margin: 0;
+  border-radius: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, var(--color-text-secondary));
+  background: color-mix(in srgb, var(--color-surface) 86%, var(--color-app));
+  padding: 0.7rem;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-secondary);
+}
+
+.api-rotation-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.api-rotation-modes {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.api-rotation-mode-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.api-rotation-mode-card {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--color-app) 78%, transparent);
+  color: var(--color-text-primary);
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  display: grid;
+  gap: 0.18rem;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.api-rotation-mode-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--color-border));
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--color-app));
+  transform: translateY(-1px);
+}
+
+.api-rotation-mode-card.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary) 62%, var(--color-border));
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--color-app));
+}
+
+.api-rotation-mode-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.api-rotation-mode-desc {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--color-text-secondary) 88%, var(--color-text-primary));
+  line-height: 1.4;
+}
+
+.api-rotation-side {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.api-rotation-side-card {
+  padding: 0.75rem 0.8rem;
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+}
+
+.api-rotation-info {
+  --ui-panel-radius: 0.7rem;
+  --ui-panel-bg: color-mix(in srgb, var(--color-warning) 10%, var(--color-app));
+  --ui-panel-border-color: color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+}
+
+.api-rotation-info p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: color-mix(in srgb, var(--color-warning) 75%, var(--color-text-primary));
+  line-height: 1.55;
+}
+
+.api-rotation-footnote {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.api-rotation-breaker :global(.toggle-switch) {
+  margin: 0;
+}
+
+.api-rotation-steps {
+  --ui-panel-bg: color-mix(in srgb, var(--color-app) 82%, transparent);
+}
+
+.api-rotation-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.api-rotation-step-item {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.api-rotation-step-item span {
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.api-rotation-step-item input {
+  text-align: center;
+  font-size: 0.86rem;
+  min-height: 2.2rem;
+}
+
+.api-rotation-error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-error);
+}
+
+@media (max-width: 1080px) {
+  .api-cli-sync-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .api-cli-sync-grid,
+  .api-endpoint-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .api-rotation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .api-rotation-side {
+    align-content: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .api-cli-sync-title-row {
+    flex-wrap: wrap;
+  }
+
+  .api-endpoint-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .api-endpoint-run {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .api-cli-sync-subtitle {
+    white-space: normal;
+  }
+
+  .api-cli-sync-grid,
+  .api-endpoint-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .api-rotation-steps-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================================================== */
+/* ================= TAB: SETTINGS ================= */
+/* ========================================================================== */
+
+.settings-tab .settings-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.settings-tab .settings-field > span {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-tab .settings-toggle-row {
+  display: grid;
+  gap: 0.65rem;
+}
+
+@media (min-width: 768px) {
+  .settings-tab .settings-toggle-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ========================================================================== */
+/* ================= TAB: ACCOUNTS (THEME) ================= */
+/* ========================================================================== */
+
+.accounts-page {
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+
+  --radius-sm: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  --bg-card: var(--color-surface);
+  --bg-hover: color-mix(in srgb, var(--color-surface) 84%, var(--color-bg));
+  --bg-elevated: color-mix(in srgb, var(--color-surface) 62%, var(--color-border));
+
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-bg));
+
+  --border: var(--color-border);
+  --border-hover: color-mix(in srgb, var(--color-border) 72%, var(--color-text-secondary));
+  --border-strong: color-mix(in srgb, var(--color-border) 45%, var(--color-text-primary));
+
+  --primary: var(--accent-primary);
+  --primary-light: var(--accent-secondary);
+
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --danger: var(--color-error);
+
+  --color-app: var(--color-bg);
+}
+
+:root[data-theme='light'] .accounts-page .metric-success,
+:root[data-theme='solarized'] .accounts-page .metric-success {
+  --metric-color: #14532d;
+  --metric-border: #86efac;
+  --metric-bg: #dcfce7;
+}
+
+:root[data-theme='light'] .accounts-page .metric-warning,
+:root[data-theme='solarized'] .accounts-page .metric-warning {
+  --metric-color: #92400e;
+  --metric-border: #fcd34d;
+  --metric-bg: #fef3c7;
+}
+
+:root[data-theme='light'] .accounts-page .metric-danger,
+:root[data-theme='solarized'] .accounts-page .metric-danger {
+  --metric-color: #991b1b;
+  --metric-border: #fca5a5;
+  --metric-bg: #fee2e2;
+}
+
+:root[data-theme='light'] .accounts-page .metric-disabled-note,
+:root[data-theme='solarized'] .accounts-page .metric-disabled-note {
+  --metric-color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
+  --metric-border: color-mix(in srgb, var(--border) 86%, transparent);
+  --metric-bg: color-mix(in srgb, var(--bg-hover) 82%, transparent);
+}
+
+:root[data-theme='light'] .accounts-page .metric-value,
+:root[data-theme='solarized'] .accounts-page .metric-value {
+  color: currentColor;
+}
+
+/* ========================================================================== */
+/* ================= TAB: ACCOUNTS (LAYOUT) ================= */
+/* ========================================================================== */
+
+.accounts-page .selection-btn {
+  --selection-color: var(--text-secondary);
+  --selection-border: var(--border-hover);
+  --selection-bg: var(--bg-card);
+  --selection-hover-border: var(--border-strong);
+  --selection-hover-bg: var(--bg-hover);
+  --selection-hover-color: var(--text-primary);
+  --selection-active-border: color-mix(in srgb, var(--primary) 56%, var(--border-hover));
+  --selection-active-bg: color-mix(in srgb, var(--primary) 14%, transparent);
+  --selection-active-color: color-mix(in srgb, var(--primary-light) 80%, white);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--selection-border);
+  background: var(--selection-bg);
+  color: var(--selection-color);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.accounts-page .selection-btn:hover:not(:disabled) {
+  border-color: var(--selection-hover-border);
+  background: var(--selection-hover-bg);
+  color: var(--selection-hover-color);
+}
+
+.accounts-page .selection-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.accounts-page .selection-btn.tone-primary {
+  --selection-color: color-mix(in srgb, var(--primary-light) 82%, var(--text-primary));
+  --selection-border: color-mix(in srgb, var(--primary) 36%, var(--border-hover));
+  --selection-hover-border: color-mix(in srgb, var(--primary) 58%, var(--border-strong));
+  --selection-hover-bg: color-mix(in srgb, var(--primary) 16%, transparent);
+  --selection-hover-color: color-mix(in srgb, var(--primary-light) 90%, white);
+}
+
+.accounts-page .selection-btn.tone-success {
+  --selection-color: color-mix(in srgb, var(--success) 84%, var(--text-primary));
+  --selection-border: color-mix(in srgb, var(--success) 34%, var(--border-hover));
+  --selection-hover-border: color-mix(in srgb, var(--success) 55%, var(--border-strong));
+  --selection-hover-bg: color-mix(in srgb, var(--success) 14%, transparent);
+  --selection-hover-color: color-mix(in srgb, var(--success) 92%, white);
+}
+
+.accounts-page .selection-btn.tone-danger {
+  --selection-color: color-mix(in srgb, var(--danger) 86%, var(--text-primary));
+  --selection-border: color-mix(in srgb, var(--danger) 38%, var(--border-hover));
+  --selection-hover-border: color-mix(in srgb, var(--danger) 60%, var(--border-strong));
+  --selection-hover-bg: color-mix(in srgb, var(--danger) 14%, transparent);
+  --selection-hover-color: color-mix(in srgb, var(--danger) 94%, white);
+}
+
+.accounts-page .selection-btn.tone-warning {
+  --selection-active-border: color-mix(in srgb, var(--warning) 56%, var(--border-hover));
+  --selection-active-bg: color-mix(in srgb, var(--warning) 14%, transparent);
+  --selection-active-color: color-mix(in srgb, var(--warning) 88%, var(--text-primary));
+}
+
+.accounts-page .accounts-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.accounts-page .toolbar-top-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.accounts-page .segment-control {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 0.75rem);
+  background: var(--bg-card);
+}
+
+.accounts-page .segment-control-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 4.75rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: calc(var(--radius-lg, 0.75rem) - 0.25rem);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.accounts-page .segment-control-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.accounts-page .provider-tab {
+  gap: 0.5rem;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.accounts-page .provider-tab.provider-tab-active {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.accounts-page .provider-tab.provider-tab-active:hover {
+  background: color-mix(in srgb, var(--primary) 88%, #000000);
+}
+
+.accounts-page .toolbar-bottom-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.accounts-page .accounts-search-icon {
+  color: var(--text-muted);
+}
+
+.accounts-page .accounts-search-input {
+  color: var(--text-primary);
+}
+
+.accounts-page .accounts-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.accounts-page .accounts-search-input:focus {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 56%, transparent);
+}
+
+.accounts-page .selection-btn.selection-btn-active {
+  border-color: var(--selection-active-border);
+  background: var(--selection-active-bg);
+  color: var(--selection-active-color);
+}
+
+.accounts-page .filter-toggle-btn {
+  white-space: nowrap;
+}
+
+.accounts-page .refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.accounts-page .connect-provider-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.accounts-page .connect-provider-trigger {
+  display: inline-flex;
+  align-items: center;
+}
+
+.accounts-page .connect-provider-chevron {
+  margin-left: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.accounts-page .connect-provider-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.accounts-page .connect-provider-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 12.5rem;
+  z-index: 30;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--bg-card);
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--bg-app) 78%, #000000 22%);
+}
+
+.accounts-page .connect-provider-item {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.6rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.accounts-page .connect-provider-item:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.accounts-page .bulk-actions-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.accounts-page .bulk-menu-chevron {
+  transition: transform 0.2s ease;
+}
+
+.accounts-page .bulk-menu-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.accounts-page .bulk-actions-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 15.5rem;
+  z-index: 30;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--bg-card);
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--bg-app) 78%, #000000 22%);
+}
+
+.accounts-page .bulk-action-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.6rem;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.accounts-page .bulk-action-item:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.accounts-page .bulk-action-item.tone-danger {
+  color: color-mix(in srgb, var(--danger) 88%, var(--text-primary));
+}
+
+.accounts-page .bulk-action-item.tone-danger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 44%, var(--border-hover));
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: color-mix(in srgb, var(--danger) 95%, white);
+}
+
+.accounts-page .bulk-action-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.accounts-page .bulk-action-divider {
+  height: 1px;
+  margin: 0.2rem 0;
+  background: color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+@media (min-width: 768px) {
+  .accounts-page .toolbar-top-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .accounts-page .toolbar-bottom-actions {
+    justify-content: flex-end;
+  }
+}
+
+.accounts-page .view-button {
+  gap: 0.45rem;
+}
+
+.accounts-page .view-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.accounts-page .view-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.accounts-page .view-button.is-active {
+  background: var(--primary);
+  color: white;
+}
+
+.accounts-page .view-button:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 2px;
+}
+
+.accounts-page .empty-state {
+  border: 1px dashed var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-app) 84%, transparent);
+}
+
+.accounts-page .auth-session {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.625rem;
+  background: color-mix(in srgb, var(--color-app) 82%, transparent);
+}
+
+.accounts-page .session-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 1.25rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.accounts-page .session-pill.status-success {
+  border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: color-mix(in srgb, var(--color-success) 72%, white);
+}
+
+.accounts-page .session-pill.status-error {
+  border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  color: color-mix(in srgb, var(--color-error) 74%, white);
+}
+
+.accounts-page .session-pill.status-pending {
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 78%, white);
+}
+
+.accounts-page .account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.accounts-page .account-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  animation: cardFadeIn 0.3s ease;
+}
+
+.accounts-page .account-card:has(.select-toggle input:checked),
+.accounts-page .account-card.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border-strong));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 24%, transparent), 0 4px 6px rgb(0 0 0 / 0.08);
+}
+
+.accounts-page .account-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgb(0 0 0 / 0.1);
+}
+
+.accounts-page .account-card.is-disabled {
+  opacity: 0.84;
+}
+
+.accounts-page .card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.accounts-page .provider-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.accounts-page .provider-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: white;
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.1);
+  flex-shrink: 0;
+}
+
+.accounts-page .provider-icon-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.accounts-page .provider-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.accounts-page .provider-label {
+  margin: 0;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.accounts-page .account-email {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-page .select-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-hover);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.accounts-page .select-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.accounts-page .select-toggle:has(input:checked) {
+  border-color: color-mix(in srgb, var(--primary) 48%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--text-primary);
+}
+
+.accounts-page .alert {
+  --alert-color: var(--text-secondary);
+  --alert-border: color-mix(in srgb, var(--border-hover) 70%, transparent);
+  --alert-bg: color-mix(in srgb, var(--bg-hover) 70%, transparent);
+
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  border: 1px solid var(--alert-border);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alert-color);
+  background: var(--alert-bg);
+  animation: alertSlideIn 0.3s ease;
+}
+
+.accounts-page .alert-error {
+  --alert-color: color-mix(in srgb, var(--danger) 78%, white);
+  --alert-border: color-mix(in srgb, var(--danger) 30%, transparent);
+  --alert-bg: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.accounts-page .alert-warning {
+  --alert-color: color-mix(in srgb, var(--warning) 78%, white);
+  --alert-border: color-mix(in srgb, var(--warning) 30%, transparent);
+  --alert-bg: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.accounts-page .alert-empty {
+  --alert-color: var(--text-secondary);
+  --alert-border: color-mix(in srgb, var(--border) 40%, transparent);
+  --alert-bg: color-mix(in srgb, var(--bg-hover) 32%, transparent);
+}
+
+.accounts-page .metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.accounts-page .metric-bar {
+  --metric-color: var(--text-primary);
+  --metric-border: color-mix(in srgb, var(--border-hover) 85%, transparent);
+  --metric-bg: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-height: 27px;
+  padding: 6px 9px;
+  border-radius: 5px;
+  border: 1px solid var(--metric-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--metric-color);
+  background: var(--metric-bg);
+}
+
+.accounts-page .metric-top,
+.accounts-page .metric-left,
+.accounts-page .metric-right,
+.accounts-page .metric-reset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.accounts-page .metric-top {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.accounts-page .metric-right {
+  flex-shrink: 0;
+  white-space: nowrap;
+  justify-content: flex-end;
+  align-self: flex-start;
+  margin-left: auto;
+}
+
+.accounts-page .metric-success {
+  --metric-color: color-mix(in srgb, var(--success) 18%, white);
+  --metric-border: color-mix(in srgb, var(--success) 40%, transparent);
+  --metric-bg: color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.accounts-page .metric-warning {
+  --metric-color: color-mix(in srgb, var(--warning) 15%, white);
+  --metric-border: color-mix(in srgb, var(--warning) 40%, transparent);
+  --metric-bg: color-mix(in srgb, var(--warning) 25%, transparent);
+}
+
+.accounts-page .metric-danger {
+  --metric-color: color-mix(in srgb, var(--danger) 14%, white);
+  --metric-border: color-mix(in srgb, var(--danger) 40%, transparent);
+  --metric-bg: color-mix(in srgb, var(--danger) 25%, transparent);
+}
+
+.accounts-page .metric-disabled-note {
+  --metric-color: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
+  --metric-border: color-mix(in srgb, var(--border-hover) 90%, transparent);
+  --metric-bg: color-mix(in srgb, var(--bg-hover) 78%, transparent);
+}
+
+.accounts-page .metric-icon {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.accounts-page .metric-name,
+.accounts-page .metric-time,
+.accounts-page .metric-value {
+  font-weight: 600;
+}
+
+.accounts-page .metric-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accounts-page .metric-reset {
+  justify-content: flex-end;
+  margin-top: 3px;
+  color: var(--text-secondary);
+}
+
+.accounts-page .metric-time {
+  color: inherit;
+}
+
+.accounts-page .metric-value {
+  color: color-mix(in srgb, currentColor 82%, white);
+}
+
+.accounts-page .metric-percent {
+  min-width: 30px;
+  font-weight: 700;
+  text-align: right;
+  transition: color 0.3s ease;
+}
+
+.accounts-page .action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  flex-wrap: nowrap;
+  padding-top: 2px;
+}
+
+.accounts-page .confirm-row {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.accounts-page .action-btn,
+.accounts-page .table-icon-btn.ui-btn-base {
+  --tone-color: var(--text-secondary);
+  --tone-border: var(--border-hover);
+  --tone-bg: var(--bg-card);
+  --tone-hover-bg: var(--bg-hover);
+  --tone-hover-border: var(--border-strong);
+  --tone-hover-color: color-mix(in srgb, var(--text-primary) 92%, transparent);
+}
+
+.accounts-page .action-btn {
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--tone-border);
+  background: transparent;
+  color: var(--tone-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+
+.accounts-page .action-btn.tone-sync,
+.accounts-page .table-icon-btn.ui-btn-base.tone-sync {
+  --tone-color: color-mix(in srgb, var(--primary) 82%, var(--text-primary));
+  --tone-border: color-mix(in srgb, var(--primary) 32%, var(--border-hover));
+  --tone-bg: color-mix(in srgb, var(--primary) 10%, transparent);
+  --tone-hover-bg: color-mix(in srgb, var(--primary) 14%, transparent);
+  --tone-hover-border: color-mix(in srgb, var(--primary) 48%, var(--border-strong));
+  --tone-hover-color: color-mix(in srgb, var(--primary) 88%, var(--text-primary));
+}
+
+.accounts-page .action-btn.tone-success,
+.accounts-page .table-icon-btn.ui-btn-base.tone-success {
+  --tone-color: color-mix(in srgb, var(--success) 82%, white);
+  --tone-border: color-mix(in srgb, var(--success) 36%, var(--border-hover));
+  --tone-bg: color-mix(in srgb, var(--success) 10%, transparent);
+  --tone-hover-bg: color-mix(in srgb, var(--success) 14%, transparent);
+  --tone-hover-border: color-mix(in srgb, var(--success) 56%, var(--border-strong));
+  --tone-hover-color: color-mix(in srgb, var(--success) 92%, white);
+}
+
+.accounts-page .action-btn.tone-danger,
+.accounts-page .table-icon-btn.ui-btn-base.tone-danger {
+  --tone-color: color-mix(in srgb, var(--danger) 82%, white);
+  --tone-border: color-mix(in srgb, var(--danger) 34%, var(--border-hover));
+  --tone-bg: color-mix(in srgb, var(--danger) 10%, transparent);
+  --tone-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  --tone-hover-border: color-mix(in srgb, var(--danger) 52%, var(--border-strong));
+  --tone-hover-color: color-mix(in srgb, var(--danger) 90%, white);
+}
+
+.accounts-page .action-btn:hover:not(:disabled),
+.accounts-page .table-icon-btn.ui-btn-base:hover:not(:disabled) {
+  background: var(--tone-hover-bg);
+  border-color: var(--tone-hover-border);
+  color: var(--tone-hover-color);
+}
+
+.accounts-page .action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.accounts-page .table-shell {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.accounts-page .accounts-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.accounts-page .accounts-table thead {
+  background: color-mix(in srgb, var(--bg-hover) 56%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+
+.accounts-page .accounts-table th {
+  padding: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.accounts-page .accounts-table td {
+  padding: 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+}
+
+.accounts-page .table-row {
+  transition: all 0.2s;
+  animation: tableRowFadeIn 0.3s ease;
+}
+
+.accounts-page .table-row:hover {
+  background: color-mix(in srgb, var(--bg-hover) 54%, transparent);
+}
+
+.accounts-page .table-row.is-selected {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.accounts-page .col-check {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.accounts-page .col-actions {
+  width: 300px;
+  text-align: right;
+}
+
+.accounts-page .table-checkbox {
+  width: 13px;
+  height: 13px;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-hover);
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.accounts-page .table-account-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 270px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.accounts-page .table-account-sub {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.accounts-page .table-error {
+  margin: 2px 0 0;
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-primary));
+  font-size: 11px;
+  max-width: 280px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.accounts-page .provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: 999px;
+  height: 24px;
+  padding: 0 0.5rem 0 0.35rem;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.accounts-page .provider-chip-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.accounts-page .provider-chip-image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.accounts-page .reset-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 132px;
+}
+
+.accounts-page .reset-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.accounts-page .reset-name {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--text-muted);
+}
+
+.accounts-page .reset-relative {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.accounts-page .reset-absolute,
+.accounts-page .reset-none {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.accounts-page .status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  width: 100%;
+  max-width: 180px;
+}
+
+.accounts-page .status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.accounts-page .status-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.375rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-hover) 66%, transparent);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.accounts-page .status-pill.enabled,
+.accounts-page .status-pill.quota-ok {
+  border-color: color-mix(in srgb, var(--success) 56%, var(--border));
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  color: color-mix(in srgb, var(--success) 80%, var(--text-primary));
+}
+
+.accounts-page .status-pill.quota-warning {
+  border-color: color-mix(in srgb, var(--warning) 56%, var(--border));
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: color-mix(in srgb, var(--warning) 82%, var(--text-primary));
+}
+
+.accounts-page .status-pill.quota-low {
+  border-color: color-mix(in srgb, var(--warning) 56%, var(--border));
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: color-mix(in srgb, var(--warning) 82%, var(--text-primary));
+}
+
+.accounts-page .status-pill.quota-error,
+.accounts-page .status-pill.quota-exhausted,
+.accounts-page .status-pill.quota-empty,
+.accounts-page .status-pill.quota-unknown {
+  border-color: color-mix(in srgb, var(--danger) 56%, var(--border));
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-primary));
+}
+
+.accounts-page .table-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.accounts-page .table-metric {
+  border-radius: 0.25rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-hover) 66%, transparent);
+  padding: 0.375rem 0.5rem;
+}
+
+.accounts-page .table-metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.accounts-page .table-metric-head span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--text-secondary);
+}
+
+.accounts-page .table-metric-head span:last-child {
+  font-weight: 600;
+}
+
+.accounts-page .table-metric-success .table-metric-head span:last-child {
+  color: #4ade80;
+}
+
+.accounts-page .table-metric-warning .table-metric-head span:last-child {
+  color: #fbbf24;
+}
+
+.accounts-page .table-metric-danger .table-metric-head span:last-child {
+  color: #f87171;
+}
+
+.accounts-page .table-progress {
+  margin-top: 0.375rem;
+  position: relative;
+  height: 0.375rem;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.accounts-page .table-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.5s ease-out;
+  background: linear-gradient(90deg, rgb(16 185 129 / 0.5), #34d399);
+}
+
+.accounts-page .table-metric-warning .table-progress span {
+  background: linear-gradient(90deg, rgb(245 158 11 / 0.5), #fbbf24);
+}
+
+.accounts-page .table-metric-danger .table-progress span {
+  background: linear-gradient(90deg, rgb(239 68 68 / 0.5), #f87171);
+}
+
+.accounts-page .table-actions,
+.accounts-page .table-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.accounts-page .table-icon-btn.ui-btn-base {
+  min-height: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border-radius: 0.25rem;
+  font-size: 11px;
+  border: 1px solid var(--tone-border);
+  background: var(--tone-bg);
+  color: var(--tone-color);
+}
+
+.accounts-page .table-text-btn.ui-btn-base {
+  min-height: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  font-size: 11px;
+}
+
+.accounts-page .accounts-spinning {
+  animation: accounts-spin 1s linear infinite;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes alertSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tableRowFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes accounts-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .accounts-page .col-actions {
+    width: 270px;
+  }
+}
+
+/* ========================================================================== */
+/* ================= TAB: SYSTEM LOGS ================= */
+/* ========================================================================== */
+
+.system-logs-tab .logs-filters {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.system-logs-tab .logs-filters > * {
+  min-width: 0;
+}
+
+.system-logs-tab .filter-label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.system-logs-tab .filter-label span {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.system-logs-tab .filter-select {
+  width: 100%;
+  background: var(--color-app);
+}
+
+.system-logs-tab .filter-select option {
+  color: #111827;
+  background: #ffffff;
+}
+
+.system-logs-tab .logs-viewport {
+  user-select: text;
+  -webkit-user-select: text;
+  scrollbar-gutter: stable both-edges;
+  overflow: auto;
+}
+
+.system-logs-tab .logs-table {
+  min-width: 58rem;
+}
+
+.system-logs-tab .logs-grid {
+  display: grid;
+  grid-template-columns: 11rem 6rem 8rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.system-logs-tab .log-row {
+  display: grid;
+  grid-template-columns: 11rem 6rem 8rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.48rem 0.75rem;
+  font-size: 12px;
+  line-height: 1.4;
+  transition: background-color 0.16s ease;
+  background: color-mix(in srgb, var(--color-app) 92%, transparent);
+}
+
+.system-logs-tab .log-row:hover {
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+}
+
+.system-logs-tab .log-row-error {
+  background: color-mix(in srgb, var(--color-error) 6%, var(--color-app));
+}
+
+.system-logs-tab .log-row-warning {
+  background: color-mix(in srgb, var(--color-warning) 6%, var(--color-app));
+}
+
+.system-logs-tab .log-level-cell {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+}
+
+.system-logs-tab .log-time,
+.system-logs-tab .log-scope,
+.system-logs-tab .log-message {
+  margin: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.system-logs-tab .log-time,
+.system-logs-tab .log-scope {
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-logs-tab .log-scope {
+  text-transform: lowercase;
+}
+
+.system-logs-tab .log-message {
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-logs-tab .log-message-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.system-logs-tab .log-message.is-expanded {
+  white-space: normal;
+  text-overflow: unset;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.system-logs-tab .log-message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.system-logs-tab .log-message-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1.1;
+  color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.system-logs-tab .log-message-link:hover {
+  text-decoration: underline;
+}
+
+.system-logs-tab .log-message-link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.system-logs-tab .log-badge {
+  align-self: center;
+  justify-self: start;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  min-height: 1.3rem;
+  padding: 0.2rem 0.45rem;
+  min-width: 4.6rem;
+  justify-content: center;
+}
+
+.system-logs-tab .system-logs-spinning {
+  animation: system-logs-spin 1s linear infinite;
+}
+
+@media (min-width: 760px) {
+  .system-logs-tab .logs-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(10rem, 12rem);
+  }
+
+  .system-logs-tab .scope-filter,
+  .system-logs-tab .order-toggle {
+    grid-column: 1 / -1;
+  }
+
+  .system-logs-tab .order-toggle {
+    justify-self: start;
+  }
+}
+
+@media (min-width: 1080px) {
+  .system-logs-tab .logs-filters {
+    grid-template-columns: minmax(0, 1fr) 10rem 12rem auto;
+    align-items: end;
+  }
+
+  .system-logs-tab .scope-filter,
+  .system-logs-tab .order-toggle {
+    grid-column: auto;
+  }
+
+  .system-logs-tab .order-toggle {
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 960px) {
+  .system-logs-tab .logs-table {
+    min-width: 48rem;
+  }
+
+  .system-logs-tab .logs-grid,
+  .system-logs-tab .log-row {
+    grid-template-columns: 9rem 5.5rem 7rem minmax(0, 1fr);
+  }
+}
+
+
+/* ========================================================================== */
+/* ================= COMPONENT: ACCOUNT SYNC MODAL ========================= */
+/* ========================================================================== */
+
+.accounts-sync-modal.sync-modal {
+  max-height: min(82vh, 44rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.accounts-sync-modal .sync-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.accounts-sync-modal .sync-head-main {
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.accounts-sync-modal .sync-head-copy h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.accounts-sync-modal .sync-head-copy p {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.accounts-sync-modal .sync-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--color-app) 88%, transparent);
+}
+
+.accounts-sync-modal .sync-icon.is-loading {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-border));
+  color: var(--color-warning);
+}
+
+.accounts-sync-modal .sync-icon.is-success {
+  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+  color: var(--color-success);
+}
+
+.accounts-sync-modal .sync-icon.is-error {
+  border-color: color-mix(in srgb, var(--color-error) 40%, var(--color-border));
+  color: var(--color-error);
+}
+
+.accounts-sync-modal .sync-body {
+  overflow-y: auto;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.accounts-sync-modal .state-panel,
+.accounts-sync-modal .error-panel {
+  --ui-panel-radius: 0.5rem;
+  --ui-panel-bg: color-mix(in srgb, var(--color-app) 88%, transparent);
+
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.accounts-sync-modal .state-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.accounts-sync-modal .state-copy {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+}
+
+.accounts-sync-modal .target-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.accounts-sync-modal .target-item {
+  --ui-panel-radius: 0.6rem;
+  --ui-panel-bg: color-mix(in srgb, var(--color-app) 86%, transparent);
+
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+  padding: 0.7rem 0.8rem;
+  color: var(--color-text-secondary);
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.accounts-sync-modal .target-item:hover {
+  border-color: var(--border-hover);
+  color: var(--color-text-primary);
+}
+
+.accounts-sync-modal .target-item.is-active {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-hover));
+  background: color-mix(in srgb, var(--primary) 12%, var(--color-app));
+  color: var(--color-text-primary);
+}
+
+.accounts-sync-modal .target-name {
+  margin: 0;
+  font-size: 0.82rem;
+  color: inherit;
+  font-weight: 600;
+}
+
+.accounts-sync-modal .target-desc {
+  margin: 0.22rem 0 0;
+  font-size: 0.73rem;
+  color: var(--color-text-secondary);
+}
+
+.accounts-sync-modal .target-path {
+  display: inline-flex;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.35rem;
+  font-size: 0.68rem;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-app) 92%, transparent);
+}
+
+.accounts-sync-modal .error-panel {
+  --ui-panel-border-color: color-mix(in srgb, var(--color-error) 36%, var(--color-border));
+  --ui-panel-bg: color-mix(in srgb, var(--color-error) 12%, transparent);
+
+  color: var(--color-error);
+}
+
+.accounts-sync-modal .error-panel p {
+  margin: 0;
+  color: inherit;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.accounts-sync-modal .result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.accounts-sync-modal .result-item {
+  --ui-panel-radius: 0.5rem;
+  --ui-panel-bg: color-mix(in srgb, var(--color-app) 86%, transparent);
+
+  padding: 0.55rem 0.65rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.accounts-sync-modal .result-item-full {
+  grid-column: 1 / -1;
+}
+
+.accounts-sync-modal .result-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.accounts-sync-modal .result-value {
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.accounts-sync-modal .field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.accounts-sync-modal .field-list code,
+.accounts-sync-modal .field-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-app) 92%, transparent);
+  color: var(--color-text-primary);
+  font-size: 0.68rem;
+  padding: 0 0.5rem;
+}
+
+.accounts-sync-modal .accounts-sync-spinning {
+  animation: accounts-sync-spin 1s linear infinite;
+}
+
+@media (max-width: 720px) {
+  .accounts-sync-modal .result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ========================================================================== */
+/* ================= COMPONENT: BATCH DELETE MODAL ========================= */
+/* ========================================================================== */
+
+.batch-delete-modal .danger-icon {
+  border-color: color-mix(in srgb, var(--color-error) 46%, var(--color-border));
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+}
+
+/* ========================================================================== */
+/* ================= COMPONENT: TOAST VIEWPORT ============================= */
+/* ========================================================================== */
+
+.toast-viewport .toast-card {
+  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-border) 82%, var(--toast-accent) 18%);
+  background-color: color-mix(in srgb, var(--color-surface) 94%, var(--toast-accent) 6%);
+}
+
+.toast-viewport .toast-card[data-type='success'] {
+  --toast-accent: var(--color-success);
+}
+
+.toast-viewport .toast-card[data-type='error'] {
+  --toast-accent: var(--color-error);
+}
+
+.toast-viewport .toast-card[data-type='info'] {
+  --toast-accent: var(--color-info);
+}
+
+.toast-viewport .toast-card[data-type='warning'] {
+  --toast-accent: var(--color-warning);
+}
+
+.toast-viewport .toast-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: color-mix(in srgb, var(--toast-accent) 58%, transparent);
+}
+
+.toast-viewport .toast-type {
+  color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--toast-accent) 28%);
+}
+
+.toast-viewport .toast-progress-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.toast-viewport .toast-progress {
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--toast-accent) 38%, transparent);
+  animation: toast-viewport-countdown var(--toast-duration) linear forwards;
+}
+
+/* ========================================================================== */
+/* ================= COMPONENT: TOGGLE SWITCH ============================== */
+/* ========================================================================== */
+
+.ui-toggle-switch .toggle-track-checked {
+  border-color: color-mix(in srgb, var(--accent-primary) 70%, var(--color-border));
+  background-color: color-mix(in srgb, var(--accent-primary) 42%, var(--color-surface));
+}
+
+.ui-toggle-switch .toggle-thumb {
+  background-color: color-mix(in srgb, var(--color-surface) 84%, var(--color-text-primary));
+}
+
+.ui-toggle-switch .toggle-track-checked .toggle-thumb {
+  background-color: color-mix(in srgb, var(--color-bg) 88%, var(--color-surface));
+}
+
+/* ========================================================================== */
+/* ================= ANIMATIONS (NAMESPACED) =============================== */
+/* ========================================================================== */
+
+@keyframes system-logs-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes accounts-sync-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes toast-viewport-countdown {
+  from {
+    transform: translateX(0%);
+  }
+
+  to {
+    transform: translateX(-100%);
+  }
+}
+

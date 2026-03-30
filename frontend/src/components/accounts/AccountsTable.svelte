@@ -4,8 +4,8 @@
 
 export let accounts: Account[] = []
 export let selectedIds: string[] = []
-export let allVisibleSelected = false
 export let busyAccountIds: string[] = []
+export let allVisibleSelected = false
 export let refreshingAccountID = ''
 export let confirmRemoveAccountID = ''
 export let actionAccountID = ''
@@ -21,7 +21,6 @@ export let actionAccountID = ''
   export let onConfirmRemove: (accountID: string) => Promise<void>
   export let onCancelRemove: () => void
 
-  const isBusy = (accountID: string): boolean => busyAccountIds.includes(accountID)
 </script>
 
 <div class="table-shell">
@@ -43,7 +42,7 @@ export let actionAccountID = ''
         <AccountRow
           {account}
           selected={selectedIds.includes(account.id)}
-          busy={isBusy(account.id)}
+          busy={busyAccountIds.includes(account.id)}
           refreshing={refreshingAccountID === account.id}
           confirmingDelete={confirmRemoveAccountID === account.id}
           deleteInProgress={actionAccountID === account.id}

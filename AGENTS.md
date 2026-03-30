@@ -4,17 +4,27 @@ This document provides essential information for AI agents working in the CLIro-
 
 ## Project Overview
 
-**CLIro-Go** is a desktop application built with Wails (Go + Svelte) that provides an OpenAI-compatible proxy server for ChatGPT Codex API access. It manages multiple ChatGPT accounts, handles OAuth authentication, quota tracking, and exposes a local HTTP proxy that translates OpenAI API calls to ChatGPT's Codex backend.
+**CLIro-Go** is a desktop application built with Wails (Go + Svelte) that provides an OpenAI-compatible local proxy for multiple upstream providers. It currently routes requests to ChatGPT Codex and Kiro (Amazon Q/Kiro runtime), manages account authentication, tracks quota and health state, exposes local OpenAI-compatible plus Anthropic-compatible endpoints, and can publish the proxy through Cloudflared.
 
 - **Language**: Go 1.23+ (backend), TypeScript + Svelte 3 (frontend)
 - **Framework**: Wails v2.11.0, Vite, Tailwind CSS
-- **Current Release**: v0.1.0 (Initial Release)
+- **Current Release**: v0.2.0
 - **License**: Not specified
 - **Main Entry Point**: [main.go](main.go)
 - **Data Directory**: `~/.cliro-go/` with multiple JSON files:
   - `config.json` - Application settings (proxy port, LAN access, auto-start)
-  - `accounts.json` - All ChatGPT account data
+  - `accounts.json` - All Codex and Kiro account data
   - `stats.json` - Proxy usage statistics
+  - `app.log` - Persistent application log file
+  - `bin/cloudflared(.exe)` - Downloaded Cloudflared binary for public access
+
+## Current Behavior Snapshot
+
+- Only **Kiro** models publish `-thinking` aliases in `GET /v1/models`. Codex models stay unsuffixed.
+- Kiro runtime endpoints are fixed to `q.us-east-1.amazonaws.com` and `codewhisperer.us-east-1.amazonaws.com`; do not make them region-aware unless upstream behavior is re-verified.
+- Authorization mode requires the configured API key for **all** proxy routes when enabled.
+- Smart `RefreshAllQuotas()` skips disabled, banned, and not-yet-reset exhausted accounts. `ForceRefreshAllQuotas()` bypasses that skip logic.
+- API Router now owns proxy runtime controls, scheduling policy, endpoint testing, and Cloudflared public access.
 
 ## Essential Commands
 
@@ -44,6 +54,9 @@ cd frontend && npm run build
 ### Testing
 
 ```bash
+# Go packages used by active app code
+go test . ./internal/...
+
 # Test proxy health
 curl http://localhost:8095/health
 
@@ -72,10 +85,12 @@ curl -X POST http://localhost:8095/v1/chat/completions \
 
 ### Core Modules
 
-#### 1. Proxy Service ([internal/proxy/service.go](internal/proxy/service.go))
-OpenAI-compatible HTTP server with routes:
+#### 1. Gateway Service ([internal/gateway/server.go](internal/gateway/server.go))
+OpenAI-compatible and Anthropic-compatible HTTP server with routes:
+- `POST /v1/responses` - OpenAI Responses API
 - `POST /v1/chat/completions` - Main chat endpoint
 - `POST /v1/completions` - Legacy completions
+- `POST /v1/messages` - Anthropic-compatible messages endpoint
 - `GET /v1/models` - List available models
 - `GET /health`, `GET /v1/stats` - Monitoring
 
@@ -83,14 +98,17 @@ OpenAI-compatible HTTP server with routes:
 1. Receives OpenAI-format request
 2. Gets available account from pool
 3. Ensures fresh token via `auth.EnsureFreshAccount()`
-4. Translates to ChatGPT Codex API format
+4. Translates protocol requests into provider-specific runtime payloads
 5. Streams or collects response
-6. Updates account stats and cooldowns
+6. Updates account stats, health state, and cooldowns
 
-**Retry Logic**: Tries all available accounts on failure, handles quota exhaustion and auth errors.
+**Retry Logic**: Tries available accounts on failure, distinguishes transient cooldown from durable disable/banned states, and emits provider availability diagnostics when the pool is empty.
 
 #### 2. Auth System ([internal/auth/codex.go](internal/auth/codex.go))
 - **OAuth 2.0 PKCE flow** for ChatGPT authentication
+- **Kiro auth flows** in [internal/auth/kiro.go](internal/auth/kiro.go):
+  - AWS Builder ID device flow
+  - Google/GitHub social login via local callback server
 - **Token management**: Stores access/refresh/id tokens, auto-refreshes before expiry (5min skew)
 - **Callback server**: Runs on `localhost:1455` to receive OAuth redirects
 - **Session tracking**: Polls auth status, emits events to frontend
@@ -103,9 +121,9 @@ OpenAI-compatible HTTP server with routes:
 - **Snapshot pattern**: `Snapshot()` returns immutable copy for UI
 - **Auto-save**: Writes to disk on every mutation (only affected file)
 
-#### 4. Connection Pooling ([internal/pool/pool.go](internal/pool/pool.go))
+#### 4. Connection Pooling ([internal/account/pool.go](internal/account/pool.go))
 - **Round-robin selection** with atomic counter
-- **Availability filtering**: Skips disabled, cooldown, or quota-exhausted accounts
+- **Availability filtering**: Skips banned, durably disabled, cooldown, or quota-exhausted accounts
 - **No pre-warming**: Accounts validated on-demand by proxy service
 
 #### 5. Quota System ([internal/auth/quota.go](internal/auth/quota.go))
@@ -118,6 +136,12 @@ OpenAI-compatible HTTP server with routes:
 - **Event emission**: Broadcasts log entries to frontend via Wails events
 - **Levels**: Info, Error, Debug
 - **Context attachment**: Binds to Wails context for event emission
+
+#### 7. Cloudflared Public Access ([internal/cloudflared/manager.go](internal/cloudflared/manager.go))
+- **Binary management**: Downloads Cloudflared into `~/.cliro-go/bin/`
+- **Tunnel modes**: Supports quick tunnels and token-based named tunnels
+- **Process lifecycle**: Starts/stops with explicit API Router actions and follows proxy restarts
+- **Status extraction**: Parses stdout/stderr to discover public tunnel URLs and process errors
 
 ## Key Patterns & Conventions
 
@@ -180,10 +204,10 @@ const result = await MyNewMethod("value");
 
 ### Adding a New Proxy Endpoint
 
-1. Add route handler in [internal/proxy/service.go](internal/proxy/service.go)
-2. Register route in `Start()` method
-3. Update OpenAPI docs if needed
-4. Test with curl or Postman
+1. Add or extend handler logic in [internal/gateway/openai_handlers.go](internal/gateway/openai_handlers.go) or [internal/gateway/anthropic_handlers.go](internal/gateway/anthropic_handlers.go)
+2. Register or wire the route in [internal/gateway/server.go](internal/gateway/server.go)
+3. Update model/provider validation in `internal/route/` if needed
+4. Test with curl or targeted Go tests
 
 ### Adding a New Config Field
 
@@ -221,6 +245,14 @@ onMount(() => {
 - Backend exchanges code for tokens, saves account
 - Frontend polls `GetCodexAuthSession(sessionId)` until success/error
 
+### Kiro Authentication Flow
+- Kiro supports two login paths:
+  - `StartKiroAuth()` → AWS Builder ID device authorization
+  - `StartKiroSocialAuth(provider)` → Google/GitHub social login via local callback server
+- Kiro social login uses a localhost callback on port `9876` by default, with dynamic-port fallback if busy.
+- Kiro runtime endpoints are fixed to `q.us-east-1.amazonaws.com` and `codewhisperer.us-east-1.amazonaws.com`; do not make them region-aware unless the upstream behavior is re-verified.
+- Current Kiro runtime user-agent version is `0.10.32`.
+
 ### Port Requirements
 - **Proxy**: Default 8095 (configurable in settings)
 - **OAuth Callback**: Port 1455 (hardcoded, must be free)
@@ -239,9 +271,9 @@ onMount(() => {
 - Refresh failures trigger cooldown and error logging
 
 ### Account Availability
-- Accounts filtered by: enabled flag, cooldown status, quota exhaustion
-- Pool returns error if no accounts available
-- Proxy retries with next account on failure
+- Accounts filtered by: enabled flag, health state, cooldown status, and quota exhaustion
+- Pool reports availability breakdowns (`ready`, quota cooldown, transient cooldown, durable disabled, banned)
+- Proxy retries with next account on failure and only returns provider-unavailable when all matching accounts are unavailable
 
 ### CORS & Security
 - Proxy allows all origins by default (for local development)
@@ -315,14 +347,29 @@ StopProxy() error                             // Stop proxy server
 SetProxyPort(port int) error                  // Change proxy port
 SetAllowLAN(allow bool) error                 // Toggle LAN access
 SetAutoStartProxy(autoStart bool) error       // Toggle auto-start
+SetProxyAPIKey(apiKey string) error           // Set proxy API key
+RegenerateProxyAPIKey() (string, error)       // Generate and persist a new proxy API key
+SetAuthorizationMode(enabled bool) error      // Require API key for all proxy routes
+SetSchedulingMode(mode string) error          // Update account scheduling mode
+SetCircuitBreaker(enabled bool) error         // Toggle staged cooldown breaker
+SetCircuitSteps(steps []int) error            // Update breaker cooldown steps
+SetCloudflaredConfig(mode, token string, useHTTP2 bool) error // Save Cloudflared config
+InstallCloudflared() error                    // Download Cloudflared binary
+StartCloudflared() error                      // Start public tunnel
+StopCloudflared() error                       // Stop public tunnel
 
 // Account Management
 StartCodexAuth() (*auth.CodexAuthStart, error)           // Initiate OAuth flow
 GetCodexAuthSession(sessionID string) auth.CodexAuthSessionView  // Poll auth status
 CancelCodexAuth(sessionID string)                        // Cancel OAuth flow
+StartKiroAuth() (*auth.KiroAuthStart, error)             // Start Kiro device auth
+StartKiroSocialAuth(provider string) (*auth.KiroAuthStart, error) // Start Kiro social auth
+GetKiroAuthSession(sessionID string) auth.KiroAuthSessionView     // Poll Kiro auth status
+CancelKiroAuth(sessionID string)                         // Cancel Kiro auth flow
 RefreshAccount(accountID string) error                   // Refresh account tokens
 RefreshQuota(accountID string) error                     // Refresh quota info
 RefreshAllQuotas() error                                 // Refresh all account quotas
+ForceRefreshAllQuotas() error                            // Refresh all quotas without smart skips
 DeleteAccount(accountID string) error                    // Delete account
 ToggleAccount(accountID string, enabled bool) error      // Enable/disable account
 ClearCooldown(accountID string) error                    // Clear cooldown timer
@@ -369,9 +416,13 @@ Response: {
   "object":"list",
   "data":[
     {"id":"gpt-5.2-codex","object":"model","owned_by":"codex"},
-    {"id":"gpt-5.3-codex","object":"model","owned_by":"codex"}
+    {"id":"claude-sonnet-4.5","object":"model","owned_by":"kiro"},
+    {"id":"claude-sonnet-4.5-thinking","object":"model","owned_by":"kiro"}
   ]
 }
+
+# Note
+# Kiro models publish `-thinking` aliases; Codex models do not.
 
 # Chat Completions (OpenAI-compatible)
 POST /v1/chat/completions
@@ -518,7 +569,18 @@ frontend/src/
 {
   "proxyPort": 8095,
   "allowLan": false,
-  "autoStartProxy": true
+  "autoStartProxy": true,
+  "proxyApiKey": "sk-cliro_xxx",
+  "authorizationMode": false,
+  "schedulingMode": "balance",
+  "circuitBreaker": false,
+  "circuitSteps": [10, 30, 60],
+  "cloudflared": {
+    "enabled": false,
+    "mode": "quick",
+    "token": "",
+    "useHttp2": true
+  }
 }
 ```
 

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Activity, Gauge, Server, Users } from 'lucide-svelte'
+  import { Ban, Gauge, Server, Users } from 'lucide-svelte'
   import SurfaceCard from '@/components/common/SurfaceCard.svelte'
   import StatusBadge from '@/components/common/StatusBadge.svelte'
   import { appService, type Account, type AppState, type ProxyStatus } from '@/services/wails-api'
+  import { deriveQuotaDisplayStatus } from '@/utils/account-quota'
   import { formatNumber, formatUnixSeconds } from '@/utils/formatters'
 
   export let state: AppState | null = null
@@ -16,9 +17,12 @@
 
   const countEnabledAccounts = (items: Account[]): number => items.filter((account) => account.enabled).length
 
-  const countAccountsWithCooldown = (items: Account[]): number => {
-    const now = Math.floor(Date.now() / 1000)
-    return items.filter((account) => (account.cooldownUntil ?? 0) > now).length
+  const countBannedAccounts = (items: Account[]): number => {
+    return items.filter((account) => account.banned).length
+  }
+
+  const countExhaustedAccounts = (items: Account[]): number => {
+    return items.filter((account) => deriveQuotaDisplayStatus(account.quota) === 'exhausted').length
   }
 
   const getGreeting = (hour: number): string => {
@@ -55,7 +59,8 @@
 
   $: enabledCount = countEnabledAccounts(accounts)
   $: disabledCount = Math.max(accounts.length - enabledCount, 0)
-  $: cooldownCount = countAccountsWithCooldown(accounts)
+  $: bannedCount = countBannedAccounts(accounts)
+  $: exhaustedCount = countExhaustedAccounts(accounts)
   $: stats = state?.stats
   $: totalRequests = stats?.totalRequests ?? 0
   $: successRequests = stats?.successRequests ?? 0
@@ -80,9 +85,9 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        <StatusBadge tone="neutral">Accounts {formatNumber(accounts.length)}</StatusBadge>
         <StatusBadge tone={proxyRunning ? 'success' : 'error'}>{proxyRunning ? 'Proxy Running' : 'Proxy Stopped'}</StatusBadge>
         <StatusBadge tone="info">Port {proxyPort}</StatusBadge>
-        <StatusBadge tone="neutral">{formatNumber(enabledCount)} / {formatNumber(accounts.length)} enabled</StatusBadge>
       </div>
     </div>
   </SurfaceCard>
@@ -99,24 +104,6 @@
 
     <SurfaceCard className="p-3">
       <div class="mb-2 flex items-center justify-between">
-        <p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Enabled</p>
-        <Activity size={16} class="text-text-secondary" />
-      </div>
-      <p class="text-2xl font-semibold text-text-primary">{formatNumber(enabledCount)}</p>
-      <p class="mt-0.5 text-xs text-text-secondary">{formatNumber(disabledCount)} disabled</p>
-    </SurfaceCard>
-
-    <SurfaceCard className="p-3">
-      <div class="mb-2 flex items-center justify-between">
-        <p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Available Pool</p>
-        <Gauge size={16} class="text-text-secondary" />
-      </div>
-      <p class="text-2xl font-semibold text-text-primary">{formatNumber(state?.availableCount)}</p>
-      <p class="mt-0.5 text-xs text-text-secondary">{formatNumber(cooldownCount)} in cooldown</p>
-    </SurfaceCard>
-
-    <SurfaceCard className="p-3">
-      <div class="mb-2 flex items-center justify-between">
         <p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Proxy</p>
         <Server size={16} class="text-text-secondary" />
       </div>
@@ -127,6 +114,24 @@
         </StatusBadge>
       </div>
       <p class="mt-0.5 truncate text-xs text-text-secondary">{proxyURL}</p>
+    </SurfaceCard>
+
+    <SurfaceCard className="p-3">
+      <div class="mb-2 flex items-center justify-between">
+        <p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Banned Accounts</p>
+        <Ban size={16} class="text-text-secondary" />
+      </div>
+      <p class="text-2xl font-semibold text-text-primary">{formatNumber(bannedCount)}</p>
+      <p class="mt-0.5 text-xs text-text-secondary">{formatNumber(disabledCount)} disabled</p>
+    </SurfaceCard>
+
+    <SurfaceCard className="p-3">
+      <div class="mb-2 flex items-center justify-between">
+        <p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Available Pool</p>
+        <Gauge size={16} class="text-text-secondary" />
+      </div>
+      <p class="text-2xl font-semibold text-text-primary">{formatNumber(state?.availableCount)}</p>
+      <p class="mt-0.5 text-xs text-text-secondary">{formatNumber(exhaustedCount)} exhausted</p>
     </SurfaceCard>
   </div>
 
@@ -165,11 +170,11 @@
 
       <div class="grid gap-2 sm:grid-cols-2">
         <div class="rounded-sm border border-border bg-app p-2.5">
-          <p class="text-xs text-text-secondary">Prompt Tokens</p>
+          <p class="text-xs text-text-secondary">Prompt Tokens (Input)</p>
           <p class="mt-0.5 text-lg font-semibold text-text-primary">{formatNumber(promptTokens)}</p>
         </div>
         <div class="rounded-sm border border-border bg-app p-2.5">
-          <p class="text-xs text-text-secondary">Completion Tokens</p>
+          <p class="text-xs text-text-secondary">Completion Tokens (Output)</p>
           <p class="mt-0.5 text-lg font-semibold text-text-primary">{formatNumber(completionTokens)}</p>
         </div>
         <div class="rounded-sm border border-border bg-app p-2.5">

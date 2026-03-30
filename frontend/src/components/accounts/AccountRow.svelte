@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { ArrowLeftRight, Download, Info, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-svelte'
-  import Button from '@/components/common/Button.svelte'
-  import codexIcon from '@/assets/icons/codex-icon.png'
+  import AccountActions from '@/components/accounts/AccountActions.svelte'
+  import ProviderAvatar from '@/components/accounts/ProviderAvatar.svelte'
   import type { Account } from '@/services/wails-api'
   import {
     formatBucketLabel,
@@ -13,8 +12,8 @@
     metricPercent,
     deriveQuotaDisplayStatus,
     quotaStatusLabel
-  } from '@/utils/accounts/quota'
-  import { normalizeProviderID, providerMeta } from '@/utils/accounts/provider'
+  } from '@/utils/account-quota'
+  import { normalizeProviderID } from '@/utils/account'
 
 export let account: Account
 export let selected = false
@@ -34,13 +33,11 @@ export let deleteInProgress = false
   export let onCancelRemove: () => void
 
   $: providerID = normalizeProviderID(account.provider)
-  $: meta = providerMeta(providerID)
-  $: isCodex = providerID === 'codex'
+  $: canSync = providerID === 'codex'
   $: metrics = getOverviewQuotaMetrics(account.quota)
   $: metricsWithReset = metrics.filter((metric) => hasValidReset(metric.resetAt))
   $: displayName = account.email || account.id
   $: quotaStatus = deriveQuotaDisplayStatus(account.quota)
-  $: canSync = isCodex
 </script>
 
 <tr class={`table-row ${selected ? 'is-selected' : ''}`}>
@@ -52,7 +49,10 @@ export let deleteInProgress = false
     <div class="table-account">
       <p class="table-account-name">{displayName}</p>
       <p class="table-account-sub">{account.planType || 'plan-unknown'}</p>
-      {#if account.lastError}
+      {#if account.banned && account.bannedReason}
+        <p class="table-error">{account.bannedReason}</p>
+      {/if}
+      {#if account.lastError && account.lastError !== account.bannedReason}
         <p class="table-error">{account.lastError}</p>
       {/if}
     </div>
@@ -60,14 +60,7 @@ export let deleteInProgress = false
 
   <td>
     <span class="provider-chip">
-      <span class="provider-chip-dot" style={isCodex ? undefined : `background:${meta.tint}`}>
-        {#if isCodex}
-          <img src={codexIcon} alt="Codex" class="provider-chip-image" loading="lazy" decoding="async" />
-        {:else}
-          {meta.marker}
-        {/if}
-      </span>
-      <span>{meta.label}</span>
+      <ProviderAvatar provider={account.provider} variant="chip" showLabel />
     </span>
   </td>
 
@@ -91,6 +84,9 @@ export let deleteInProgress = false
     <div class="status-block">
       <div class="status-row">
         <span class={`status-pill ${account.enabled ? 'enabled' : 'disabled'}`}>{account.enabled ? 'Enabled' : 'Disabled'}</span>
+        {#if account.banned}
+          <span class="status-pill quota-error">Banned</span>
+        {/if}
         <span class={`status-pill quota-${quotaStatus}`}>{quotaStatusLabel(quotaStatus)}</span>
       </div>
       <div class="table-metrics">
@@ -114,60 +110,23 @@ export let deleteInProgress = false
   </td>
 
   <td class="col-actions">
-    {#if confirmingDelete}
-      <div class="table-confirm">
-        <Button variant="danger" size="sm" className="table-text-btn" disabled={deleteInProgress} on:click={() => onConfirmRemove(account.id)}>
-          {deleteInProgress ? 'Removing...' : 'Confirm'}
-        </Button>
-        <Button variant="ghost" size="sm" className="table-text-btn" on:click={onCancelRemove}>Cancel</Button>
-      </div>
-    {:else}
-      <div class="table-actions">
-        <Button variant="ghost" size="sm" className="table-icon-btn" title="Details" on:click={() => onInfo(account.id)}>
-          <Info size={13} />
-        </Button>
-        {#if canSync}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="table-icon-btn sync-btn"
-            disabled={busy}
-            title="Sync account to CLI auth"
-            on:click={() => onStartSync(account.id)}
-          >
-            <ArrowLeftRight size={13} />
-          </Button>
-        {/if}
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`table-icon-btn ${account.enabled ? 'power-on' : 'power-off'}`}
-          title={account.enabled ? 'Disable account' : 'Enable account'}
-          on:click={() => onToggleAccount(account.id, !account.enabled)}
-        >
-          {#if account.enabled}
-            <Power size={13} />
-          {:else}
-            <PowerOff size={13} />
-          {/if}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="table-icon-btn"
-          disabled={busy || refreshing}
-          title="Refresh account and check quota"
-          on:click={() => onRefreshWithQuota(account.id)}
-        >
-          <RefreshCw size={13} class={refreshing ? 'is-spinning' : ''} />
-        </Button>
-        <Button variant="ghost" size="sm" className="table-icon-btn" title="Export" on:click={() => onExport(account.id)}>
-          <Download size={13} />
-        </Button>
-        <Button variant="ghost" size="sm" className="table-icon-btn danger" disabled={busy} title="Delete" on:click={() => onStartRemove(account.id)}>
-          <Trash2 size={13} />
-        </Button>
-      </div>
-    {/if}
+    <AccountActions
+      mode="table"
+      accountID={account.id}
+      enabled={account.enabled}
+      {canSync}
+      {busy}
+      {refreshing}
+      {confirmingDelete}
+      {deleteInProgress}
+      {onToggleAccount}
+      {onStartSync}
+      {onInfo}
+      onRefreshWithQuota={onRefreshWithQuota}
+      {onExport}
+      onStartRemove={onStartRemove}
+      onConfirmRemove={onConfirmRemove}
+      onCancelRemove={onCancelRemove}
+    />
   </td>
 </tr>
