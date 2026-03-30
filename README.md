@@ -4,6 +4,16 @@ CLIro-Go is a Wails desktop control plane for running a local OpenAI-compatible 
 
 Current release: **v0.2.0**
 
+## Screenshot
+
+| Dashboard | Accounts |
+| --- | --- |
+| <img width="1186" height="693" alt="Dashboard" src="https://github.com/user-attachments/assets/868fa06f-8fdd-4b01-938d-0e928db025ca" /> | <img width="1186" height="693" alt="Accounts" src="https://github.com/user-attachments/assets/dc3daaf7-5679-40e2-8af0-6f5c6bf844ce" /> |
+
+| API Route | Usage |
+| --- | --- |
+| <img width="1186" height="693" alt="API Route" src="https://github.com/user-attachments/assets/d3f6455f-2a1c-4eab-a952-0a59939ab180" /> | <img width="1186" height="693" alt="Usage" src="https://github.com/user-attachments/assets/fe2f0516-097c-4297-ba62-68690de00052" /> |
+
 ## Highlights
 
 - OpenAI-compatible and Anthropic-compatible local proxy endpoints:
