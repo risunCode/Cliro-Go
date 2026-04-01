@@ -1,19 +1,4 @@
-export const hasClipboardWrite = (): boolean => {
-  return typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function'
-}
-
-export const copyTextToClipboard = async (text: string): Promise<boolean> => {
-  if (!hasClipboardWrite()) {
-    return false
-  }
-
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    return false
-  }
-}
+export { canCopyToClipboard as hasClipboardWrite, copyTextToClipboard } from './copy'
 
 const triggerDownload = (blob: Blob, fileName: string): void => {
   const url = URL.createObjectURL(blob)

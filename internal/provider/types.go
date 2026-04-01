@@ -2,28 +2,36 @@ package provider
 
 import (
 	"cliro-go/internal/config"
+	contract "cliro-go/internal/contract"
 )
 
 type ChatRequest struct {
-	RouteFamily string         `json:"-"`
-	Model       string         `json:"model"`
-	Messages    []Message      `json:"messages"`
-	Stream      bool           `json:"stream"`
-	Temperature *float64       `json:"temperature,omitempty"`
-	TopP        *float64       `json:"top_p,omitempty"`
-	MaxTokens   *int           `json:"max_tokens,omitempty"`
-	User        string         `json:"user,omitempty"`
-	Tools       []Tool         `json:"tools,omitempty"`
-	ToolChoice  any            `json:"tool_choice,omitempty"`
-	Metadata    map[string]any `json:"-"`
+	RouteFamily string                  `json:"-"`
+	Model       string                  `json:"model"`
+	Thinking    contract.ThinkingConfig `json:"-"`
+	Messages    []Message               `json:"messages"`
+	Stream      bool                    `json:"stream"`
+	Temperature *float64                `json:"temperature,omitempty"`
+	TopP        *float64                `json:"top_p,omitempty"`
+	MaxTokens   *int                    `json:"max_tokens,omitempty"`
+	User        string                  `json:"user,omitempty"`
+	Tools       []Tool                  `json:"tools,omitempty"`
+	ToolChoice  any                     `json:"tool_choice,omitempty"`
+	Metadata    map[string]any          `json:"-"`
 }
 
 type Message struct {
-	Role       string     `json:"role"`
-	Content    any        `json:"content"`
-	Name       string     `json:"name,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Role           string          `json:"role"`
+	Content        any             `json:"content"`
+	Name           string          `json:"name,omitempty"`
+	ToolCalls      []ToolCall      `json:"tool_calls,omitempty"`
+	ToolCallID     string          `json:"tool_call_id,omitempty"`
+	ThinkingBlocks []ThinkingBlock `json:"-"`
+}
+
+type ThinkingBlock struct {
+	Thinking  string `json:"thinking"`
+	Signature string `json:"signature,omitempty"`
 }
 
 type Tool struct {
@@ -76,6 +84,7 @@ type CompletionOutcome struct {
 	Text              string
 	Thinking          string
 	ThinkingSignature string
+	ThinkingSource    string
 	ToolUses          []ToolUse
 	Usage             config.ProxyStats
 	ID                string

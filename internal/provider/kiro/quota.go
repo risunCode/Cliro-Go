@@ -1,6 +1,7 @@
 package kiro
 
 import (
+	"cliro-go/internal/util"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"cliro-go/internal/config"
+	provider "cliro-go/internal/provider"
 )
 
 const (
@@ -32,13 +34,13 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 	for attempt := 0; attempt < 2; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, kiroQuotaBaseURL+"/getUsageLimits?origin=AI_EDITOR&resourceType=AGENTIC_REQUEST&isEmailRequired=true", nil)
 		if err != nil {
-			return synthesizeQuota(currentAccount, err), "", err
+			return provider.SynthesizeQuota(currentAccount, err), "", err
 		}
 		applyKiroQuotaHeaders(req, currentAccount.AccessToken)
 
 		resp, err := f.httpClient.Do(req)
 		if err != nil {
-			return synthesizeQuota(currentAccount, err), "", err
+			return provider.SynthesizeQuota(currentAccount, err), "", err
 		}
 
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
@@ -51,15 +53,15 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 					continue
 				}
 			}
-			err = fmt.Errorf("kiro quota request failed (%d): %s", resp.StatusCode, compactHTTPBody(data))
-			return synthesizeQuota(currentAccount, err), "", err
+			err = fmt.Errorf("kiro quota request failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(data))
+			return provider.SynthesizeQuota(currentAccount, err), "", err
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			data, _ := io.ReadAll(resp.Body)
 			_ = resp.Body.Close()
-			err = fmt.Errorf("kiro quota request failed (%d): %s", resp.StatusCode, compactHTTPBody(data))
-			return synthesizeQuota(currentAccount, err), "", err
+			err = fmt.Errorf("kiro quota request failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(data))
+			return provider.SynthesizeQuota(currentAccount, err), "", err
 		}
 
 		var payload struct {
@@ -77,7 +79,7 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 			_ = resp.Body.Close()
-			return synthesizeQuota(currentAccount, err), "", err
+			return provider.SynthesizeQuota(currentAccount, err), "", err
 		}
 		_ = resp.Body.Close()
 
@@ -102,13 +104,13 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 			Total:     total,
 			Remaining: remaining,
 			Percent:   percent,
-			Status:    bucketStatus(config.QuotaBucket{Used: used, Total: total, Remaining: remaining}),
+			Status:    provider.BucketStatus(config.QuotaBucket{Used: used, Total: total, Remaining: remaining}),
 		}
 		status := bucket.Status
 		if status == "" {
 			status = "healthy"
 		}
-		summary := firstNonEmpty(
+		summary := util.FirstNonEmpty(
 			strings.TrimSpace(payload.SubscriptionInfo.SubscriptionTitle),
 			strings.TrimSpace(payload.SubscriptionInfo.SubscriptionName),
 		)
@@ -136,7 +138,7 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 		}, resolvedEmail, nil
 	}
 
-	return synthesizeQuota(currentAccount, fmt.Errorf("kiro quota request failed")), "", fmt.Errorf("kiro quota request failed")
+	return provider.SynthesizeQuota(currentAccount, fmt.Errorf("kiro quota request failed")), "", fmt.Errorf("kiro quota request failed")
 }
 
 func (f *QuotaFetcher) fetchUserEmail(ctx context.Context, account config.Account, refreshCallback func(string) (config.Account, error)) (string, error) {
@@ -167,10 +169,10 @@ func (f *QuotaFetcher) fetchUserEmail(ctx context.Context, account config.Accoun
 					continue
 				}
 			}
-			return "", fmt.Errorf("kiro user info request failed (%d): %s", resp.StatusCode, compactHTTPBody(data))
+			return "", fmt.Errorf("kiro user info request failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(data))
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return "", fmt.Errorf("kiro user info request failed (%d): %s", resp.StatusCode, compactHTTPBody(data))
+			return "", fmt.Errorf("kiro user info request failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(data))
 		}
 
 		var payload struct {
@@ -183,7 +185,7 @@ func (f *QuotaFetcher) fetchUserEmail(ctx context.Context, account config.Accoun
 			return "", err
 		}
 
-		resolved := strings.TrimSpace(firstNonEmpty(payload.Email, payload.UserInfo.Email))
+		resolved := strings.TrimSpace(util.FirstNonEmpty(payload.Email, payload.UserInfo.Email))
 		if resolved == "" {
 			return "", fmt.Errorf("kiro user info response missing email")
 		}
@@ -198,98 +200,4 @@ func applyKiroQuotaHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", kiroRuntimeUserAgent)
 	req.Header.Set("x-amz-user-agent", kiroRuntimeAmzUserAgent)
-}
-
-func synthesizeQuota(account config.Account, err error) config.QuotaInfo {
-	now := time.Now().Unix()
-	info := config.QuotaInfo{
-		Status:        "healthy",
-		Summary:       "Quota endpoint not resolved yet; using local runtime state.",
-		Source:        "runtime",
-		LastCheckedAt: now,
-	}
-	if err != nil {
-		info.Error = err.Error()
-		info.Status = "unknown"
-	}
-	if account.CooldownUntil > now {
-		info.Status = "exhausted"
-		info.Summary = firstNonEmpty(account.LastError, "Quota cooldown is active.")
-		info.Buckets = []config.QuotaBucket{{
-			Name:    "session",
-			ResetAt: account.CooldownUntil,
-			Status:  "exhausted",
-		}, {
-			Name:   "weekly",
-			Status: "unknown",
-		}}
-		return info
-	}
-	if account.LastError != "" {
-		info.Status = "degraded"
-		info.Summary = account.LastError
-	}
-	if len(account.Quota.Buckets) > 0 {
-		info.Buckets = append([]config.QuotaBucket(nil), account.Quota.Buckets...)
-	}
-	return info
-}
-
-func bucketStatus(bucket config.QuotaBucket) string {
-	if bucket.Status != "" {
-		status := normalizeQuotaStatus(bucket.Status)
-		if status != "" {
-			return status
-		}
-		return strings.ToLower(strings.TrimSpace(bucket.Status))
-	}
-	now := time.Now().Unix()
-	if bucket.Total > 0 {
-		remaining := bucket.Remaining
-		if remaining == 0 && bucket.Used > 0 && bucket.Used <= bucket.Total {
-			remaining = maxInt(bucket.Total-bucket.Used, 0)
-		}
-		if remaining <= 0 {
-			return "exhausted"
-		}
-		remainingPercent := int(float64(remaining) / float64(bucket.Total) * 100)
-		if remainingPercent <= 15 {
-			return "low"
-		}
-		return "healthy"
-	}
-	if bucket.ResetAt > now {
-		if bucket.Remaining <= 0 {
-			return "exhausted"
-		}
-		return "low"
-	}
-	return "unknown"
-}
-
-func normalizeQuotaStatus(status string) string {
-	status = strings.ToLower(strings.TrimSpace(status))
-	switch status {
-	case "ready", "healthy", "ok":
-		return "healthy"
-	case "expiring", "warning":
-		return "low"
-	case "expired", "exhausted", "quota_exceeded", "insufficient_quota":
-		return "exhausted"
-	case "", "unknown":
-		return ""
-	default:
-		return status
-	}
-}
-
-func compactHTTPBody(body []byte) string {
-	trimmed := strings.TrimSpace(string(body))
-	if trimmed == "" {
-		return "empty response"
-	}
-	if len(trimmed) > 180 {
-		return trimmed[:180] + "..."
-	}
-	return trimmed
 }

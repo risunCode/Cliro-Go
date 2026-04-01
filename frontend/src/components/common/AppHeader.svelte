@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte'
   import { Activity, LayoutDashboard, Logs, Moon, Network, Palette, Settings2, Sun, Users } from 'lucide-svelte'
   import { getNextThemeLabel, type Theme } from '@/shared/stores/theme'
   import Button from '@/components/common/Button.svelte'
@@ -8,18 +7,10 @@
 
   export let activeTab: AppTabId = 'dashboard'
   export let theme: Theme = 'light'
+  export let onSelectTab: (tab: AppTabId) => void = () => {}
+  export let onToggleTheme: () => void = () => {}
 
-  const appVersion = 'v0.2.0'
-
-  const dispatch = createEventDispatcher<{ tabChange: AppTabId; toggleTheme: void }>()
-
-  const selectTab = (tab: AppTabId): void => {
-    dispatch('tabChange', tab)
-  }
-
-  const onToggleTheme = (): void => {
-    dispatch('toggleTheme')
-  }
+  const appVersion = 'v0.3.0'
 
   const getThemeIcon = (value: Theme) => {
     if (value === 'light') {
@@ -83,7 +74,7 @@
                 ? 'border-border bg-surface text-text-primary shadow-soft'
                 : 'border-transparent text-text-secondary hover:text-text-primary'
             }`}
-            on:click={() => selectTab(tab.id)}
+            on:click={() => onSelectTab(tab.id)}
             variant="ghost"
             size="sm"
           >

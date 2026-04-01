@@ -2,6 +2,66 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-04-01
+
+### Added
+
+- Added shared utility package `internal/util` with `FirstNonEmpty()` helper to eliminate code duplication across 11 files.
+
+### Changed
+
+- Removed built-in Kiro model aliases from `internal/route/catalog_kiro.go` for cleaner model resolution.
+- Moved `internal/thinking/` package into `internal/provider/thinking/` to reduce root-level package clutter.
+
+### Fixed
+
+- Fixed Kiro live Anthropic streaming regression where tool-use blocks were not emitted after thinking completion.
+- Fixed redundant condition in `isQuotaCooldownState` that checked `AccountHealthCooldownQuota` twice.
+- Fixed potential integer overflow in account pool `Next()` by applying modulo before int conversion.
+- Removed unused `suffix` parameter from `CatalogModels()` function.
+
+### Tests & Validation
+
+- Added regression test for Kiro Anthropic live streaming tool-use emission.
+- Updated route tests to reflect removal of built-in Kiro aliases.
+- Validation passed for:
+  - `go test . ./internal/...`
+  - `npm run check`
+  - `wails build`
+
+## [0.2.1] - 2026-03-31
+
+### Added
+
+- Added one-click **Kilo CLI** config sync target in API Router, writing to `~/.config/kilo/opencode.json`.
+- Added Kilo install detection based on `~/.config/kilo` presence so sync remains available even without PATH-resolved CLI binaries.
+- Added richer OpenCode/Kilo one-click config model metadata (`name`, `limit`, `modalities`, `reasoning`) for selected local model targets.
+- Added docs for cross-protocol adapter audit and implemented model-alias feature behavior:
+  - `docs/audit-adapter-cross-protocol.md`
+  - `docs/feature-model-aliasing.md`
+
+### Changed
+
+- Refactored frontend into modular boundaries under `app/`, `features/`, `shared/`, and `styles/` while keeping existing tab routes intact.
+- Updated API Router one-click CLI sync UX with compact cards/modals, expanded install-path visibility, and refresh-on-expand detection.
+- Updated default theme initialization to `solarized` in shared store + CSS token defaults.
+- Updated footer status UX with clearer online/offline pill state and bind/base URL visibility when proxy is running.
+- Updated OpenCode and Kilo one-click config output to use `provider.CLIRO` + `permission.bash = "allow"` schema format.
+
+### Fixed
+-  Claude Code CLI, Kilo CLI and OpenCode CLI now working properly*
+- Fixed Cloudflared install/status detection by broadening binary discovery under `~/.cliro-go/bin` and refreshing status at startup.
+- Fixed CLI install-path detection and stale detection behavior in one-click sync workflows.
+- Fixed one-click CLI sync result ID mapping to avoid silent fallback to `claude-code` for unknown IDs.
+- Removed stale frontend auto-refresh settings/card logic that no longer matched current runtime behavior.
+
+### Tests & Validation
+
+- Expanded `internal/clisync` tests for Kilo target support, config writing, and status/install-path behavior.
+- Validation passed for:
+  - `go test . ./internal/...`
+  - `npm run check`
+
 ## [0.2.0] - 2026-03-30
 
 ### Added

@@ -30,18 +30,3 @@ export const toSchedulingMode = (value: string): SchedulingMode => {
   }
   return 'balance'
 }
-
-export const normalizeCircuitSteps = (steps: number[] | null | undefined): number[] => {
-  const defaults = [10, 30, 60]
-  if (!Array.isArray(steps) || steps.length === 0) {
-    return defaults
-  }
-
-  return defaults.map((fallback, index) => {
-    const value = Number(steps[index] ?? fallback)
-    if (!Number.isFinite(value) || value <= 0) {
-      return fallback
-    }
-    return Math.max(1, Math.min(3600, Math.round(value)))
-  })
-}

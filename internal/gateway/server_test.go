@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"cliro-go/internal/account"
-	"cliro-go/internal/adapter/ir"
 	"cliro-go/internal/config"
+	contract "cliro-go/internal/contract"
 	"cliro-go/internal/logger"
 	provider "cliro-go/internal/provider"
 )
@@ -22,7 +22,7 @@ type fakeExecutor struct {
 	err     error
 }
 
-func (f fakeExecutor) ExecuteFromIR(_ context.Context, _ ir.Request) (provider.CompletionOutcome, int, string, error) {
+func (f fakeExecutor) ExecuteFromIR(_ context.Context, _ contract.Request) (provider.CompletionOutcome, int, string, error) {
 	return f.outcome, f.status, f.message, f.err
 }
 
@@ -44,6 +44,18 @@ func logContains(entries []logger.Entry, fragment string) bool {
 		}
 	}
 	return false
+}
+
+func findLogEntry(entries []logger.Entry, event string, predicate func(logger.Entry) bool) (logger.Entry, bool) {
+	for _, entry := range entries {
+		if entry.Event != event {
+			continue
+		}
+		if predicate == nil || predicate(entry) {
+			return entry, true
+		}
+	}
+	return logger.Entry{}, false
 }
 
 func TestHandleResponses_RespectsNonStreamRequestsAndLogsUsage(t *testing.T) {
@@ -142,6 +154,55 @@ func TestHandleAnthropicMessages_ReturnsJSONWhenPayloadRequestsFalse(t *testing.
 		t.Fatalf("unexpected status code=%d", rr.Code)
 	}
 
+}
+
+func TestHandleAnthropicMessages_LogsThinkingDecisionWithoutContent(t *testing.T) {
+	server, _, log := newTestServer(t)
+	server.kiro = fakeExecutor{outcome: provider.CompletionOutcome{
+		Text:              "done",
+		Thinking:          "plan first carefully",
+		ThinkingSignature: contract.StableThinkingSignature("plan first carefully"),
+		ThinkingSource:    "parsed",
+		Model:             "claude-sonnet-4.5",
+		Provider:          "kiro",
+		Usage:             config.ProxyStats{PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2},
+	}}
+
+	req := httptest.NewRequest(http.MethodPost, RouteAnthropicMessages, strings.NewReader(`{"model":"claude-sonnet-4.5-thinking","max_tokens":64,"stream":false,"messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`))
+	rr := httptest.NewRecorder()
+
+	server.handleAnthropicMessages(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	entries := log.Entries(50)
+	entry, ok := findLogEntry(entries, "thinking.decision", func(entry logger.Entry) bool {
+		return entry.Fields["route"] == string(contract.EndpointAnthropicMessages) && entry.Fields["anthropic_signature_emitted"] == true
+	})
+	if !ok {
+		t.Fatalf("expected anthropic thinking.decision log entry, got %+v", entries)
+	}
+	if entry.Fields["thinking_requested"] != true {
+		t.Fatalf("thinking_requested = %#v, want true", entry.Fields["thinking_requested"])
+	}
+	if entry.Fields["thinking_source"] != "parsed" {
+		t.Fatalf("thinking_source = %#v, want parsed", entry.Fields["thinking_source"])
+	}
+	if entry.Fields["thinking_emitted"] != true {
+		t.Fatalf("thinking_emitted = %#v, want true", entry.Fields["thinking_emitted"])
+	}
+	if strings.Contains(entry.Message, "plan first carefully") {
+		t.Fatalf("thinking content leaked in message: %q", entry.Message)
+	}
+	for key, value := range entry.Fields {
+		if strings.Contains(key, "content") {
+			t.Fatalf("unexpected content field logged: %q=%#v", key, value)
+		}
+		if text, ok := value.(string); ok && strings.Contains(text, "plan first carefully") {
+			t.Fatalf("thinking content leaked in field %q=%q", key, text)
+		}
+	}
 }
 
 func TestHandleChatCompletions_RoutesKiroModelsToKiroExecutor(t *testing.T) {
@@ -276,18 +337,18 @@ func TestCompatV1RootRoute(t *testing.T) {
 	}
 }
 
-func TestStreamAnthropicMessages_EmitsSignatureDeltaAndRemappedToolArgs(t *testing.T) {
+func TestStreamAnthropicMessages_UsesSharedThinkingLifecycleForBufferedReplay(t *testing.T) {
 	server, _, _ := newTestServer(t)
 	rr := httptest.NewRecorder()
 
-	server.streamAnthropicMessages(rr, "claude-sonnet-4.5", ir.Response{
+	server.streamAnthropicMessages(rr, "claude-sonnet-4.5", contract.Response{
 		ID:                "msg_test",
 		Model:             "claude-sonnet-4.5",
 		Thinking:          "plan first",
 		ThinkingSignature: "sig_custom",
 		Text:              "done",
-		ToolCalls:         []ir.ToolCall{{ID: "toolu_1", Name: "Grep", Arguments: `{"query":"needle","paths":["src"]}`}},
-		Usage:             ir.Usage{InputTokens: 7, OutputTokens: 9},
+		ToolCalls:         []contract.ToolCall{{ID: "toolu_1", Name: "Grep", Arguments: `{"query":"needle","paths":["src"]}`}},
+		Usage:             contract.Usage{InputTokens: 7, OutputTokens: 9},
 	})
 
 	body := rr.Body.String()
@@ -309,12 +370,16 @@ func TestStreamAnthropicMessages_EmitsSignatureDeltaAndRemappedToolArgs(t *testi
 
 	thinkingDeltaIndex := strings.Index(body, `"type":"thinking_delta"`)
 	signatureDeltaIndex := strings.Index(body, `"type":"signature_delta"`)
+	textStartIndex := strings.Index(body, `"content_block":{"text":"","type":"text"}`)
 	contentBlockStopIndex := strings.Index(body, `event: content_block_stop`)
-	if thinkingDeltaIndex == -1 || signatureDeltaIndex == -1 || contentBlockStopIndex == -1 {
+	if thinkingDeltaIndex == -1 || signatureDeltaIndex == -1 || textStartIndex == -1 || contentBlockStopIndex == -1 {
 		t.Fatalf("missing expected event sequence: %s", body)
 	}
-	if !(thinkingDeltaIndex < signatureDeltaIndex && signatureDeltaIndex < contentBlockStopIndex) {
+	if !(thinkingDeltaIndex < signatureDeltaIndex && signatureDeltaIndex < contentBlockStopIndex && contentBlockStopIndex < textStartIndex) {
 		t.Fatalf("unexpected thinking event order: %s", body)
+	}
+	if strings.Count(body, `"type":"signature_delta"`) != 1 {
+		t.Fatalf("signature_delta count = %d, want 1 body=%s", strings.Count(body, `"type":"signature_delta"`), body)
 	}
 }
 

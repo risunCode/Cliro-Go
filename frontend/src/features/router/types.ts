@@ -8,8 +8,6 @@ export interface ProxyStatus {
   proxyApiKey: string
   authorizationMode: boolean
   schedulingMode: string
-  circuitBreaker: boolean
-  circuitSteps: number[]
   cloudflared: CloudflaredState
 }
 
@@ -25,7 +23,7 @@ export interface CloudflaredState {
   error: string
 }
 
-export type CliSyncAppID = 'claude-code' | 'opencode-cli' | 'codex-ai'
+export type CliSyncAppID = 'claude-code' | 'opencode-cli' | 'kilo-cli' | 'codex-ai'
 
 export interface CliSyncFile {
   name: string
@@ -55,4 +53,16 @@ export interface CliSyncResult {
 export interface LocalModelCatalogItem {
   id: string
   ownedBy: string
+}
+
+export interface EndpointTestRequest {
+  baseUrl: string
+  apiKey: string
+  endpointId: string
+  body?: string
+}
+
+export interface EndpointTestResult {
+  status: string
+  responseText: string
 }

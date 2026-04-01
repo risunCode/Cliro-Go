@@ -61,7 +61,7 @@ func (p *Pool) availableAccountsByProvider(provider string) []config.Account {
 	}
 
 	now := time.Now().Unix()
-	start := int(atomic.AddUint64(&p.current, 1))
+	start := int(atomic.AddUint64(&p.current, 1) % uint64(len(accounts)))
 	available := make([]config.Account, 0, len(accounts))
 
 	for i := 0; i < len(accounts); i++ {
@@ -145,20 +145,10 @@ func accountAvailabilityState(account config.Account, now int64) config.AccountH
 		}
 		return config.AccountHealthCooldownTransient
 	}
-	if quotaResetAt(account.Quota) > now && account.Quota.Status == "exhausted" {
+	if config.QuotaResetAt(account.Quota) > now && account.Quota.Status == "exhausted" {
 		return config.AccountHealthCooldownQuota
 	}
 	return config.AccountHealthReady
-}
-
-func quotaResetAt(quota config.QuotaInfo) int64 {
-	var latest int64
-	for _, bucket := range quota.Buckets {
-		if bucket.ResetAt > latest {
-			latest = bucket.ResetAt
-		}
-	}
-	return latest
 }
 
 func cacheFirstLess(left config.Account, right config.Account) bool {

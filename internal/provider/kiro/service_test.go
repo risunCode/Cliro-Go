@@ -12,6 +12,7 @@ import (
 	"cliro-go/internal/account"
 	"cliro-go/internal/auth"
 	"cliro-go/internal/config"
+	contract "cliro-go/internal/contract"
 	"cliro-go/internal/logger"
 	provider "cliro-go/internal/provider"
 )
@@ -92,6 +93,102 @@ func TestService_FailsOverAcrossAccounts(t *testing.T) {
 	failedAccount, ok := store.GetAccount("acct-fail")
 	if !ok || failedAccount.ErrorCount == 0 {
 		t.Fatalf("expected failed account to record the failed attempt, got %#v", failedAccount)
+	}
+}
+
+func TestService_PrefersNativeThinkingOverParsedFallback(t *testing.T) {
+	store, authManager, log := newTestDeps(t)
+	if err := store.UpsertAccount(config.Account{ID: "acct-ok", Provider: "kiro", Email: "ok@example.com", AccessToken: "token-ok", Enabled: true, CreatedAt: 1, UpdatedAt: 1, HealthState: config.AccountHealthReady}); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body := bytesJoinFrames(t,
+			awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<thinking>parsed plan</thinking>Visible answer"}),
+			awsEventFrame(t, "reasoningContentEvent", map[string]any{"text": "native plan"}),
+		)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+
+	service := NewService(store, authManager, account.NewPool(store), log, &http.Client{Transport: transport, Timeout: 2 * time.Second})
+	outcome, status, message, err := service.Complete(context.Background(), provider.ChatRequest{
+		RouteFamily: "anthropic_messages",
+		Model:       "claude-sonnet-4.5",
+		Thinking:    contract.ThinkingConfig{Requested: true, Mode: contract.ThinkingModeAuto},
+		Messages:    []provider.Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete: status=%d message=%q err=%v", status, message, err)
+	}
+	if outcome.Thinking != "native plan" {
+		t.Fatalf("expected native thinking to win, got %q", outcome.Thinking)
+	}
+	if outcome.Text != "Visible answer" {
+		t.Fatalf("expected parsed fallback tags to be removed from text, got %q", outcome.Text)
+	}
+}
+
+func TestService_UsesParsedFallbackWhenNativeThinkingMissing(t *testing.T) {
+	store, authManager, log := newTestDeps(t)
+	if err := store.UpsertAccount(config.Account{ID: "acct-ok", Provider: "kiro", Email: "ok@example.com", AccessToken: "token-ok", Enabled: true, CreatedAt: 1, UpdatedAt: 1, HealthState: config.AccountHealthReady}); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body := bytesJoinFrames(t,
+			awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<thinking>parsed plan</thinking>Visible answer"}),
+		)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+
+	service := NewService(store, authManager, account.NewPool(store), log, &http.Client{Transport: transport, Timeout: 2 * time.Second})
+	outcome, status, message, err := service.Complete(context.Background(), provider.ChatRequest{
+		RouteFamily: "anthropic_messages",
+		Model:       "claude-sonnet-4.5",
+		Thinking:    contract.ThinkingConfig{Requested: true, Mode: contract.ThinkingModeAuto},
+		Messages:    []provider.Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete: status=%d message=%q err=%v", status, message, err)
+	}
+	if outcome.Thinking != "parsed plan" {
+		t.Fatalf("expected parsed fallback thinking, got %q", outcome.Thinking)
+	}
+	if outcome.Text != "Visible answer" {
+		t.Fatalf("expected fallback tags to be removed from text, got %q", outcome.Text)
+	}
+	if outcome.ThinkingSignature == "" {
+		t.Fatalf("expected parsed fallback thinking signature")
+	}
+}
+
+func TestService_DoesNotActivateParsedFallbackWithoutThinkingRequest(t *testing.T) {
+	store, authManager, log := newTestDeps(t)
+	if err := store.UpsertAccount(config.Account{ID: "acct-ok", Provider: "kiro", Email: "ok@example.com", AccessToken: "token-ok", Enabled: true, CreatedAt: 1, UpdatedAt: 1, HealthState: config.AccountHealthReady}); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body := bytesJoinFrames(t,
+			awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<thinking>parsed plan</thinking>Visible answer"}),
+		)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+
+	service := NewService(store, authManager, account.NewPool(store), log, &http.Client{Transport: transport, Timeout: 2 * time.Second})
+	outcome, status, message, err := service.Complete(context.Background(), provider.ChatRequest{
+		RouteFamily: "anthropic_messages",
+		Model:       "claude-sonnet-4.5",
+		Messages:    []provider.Message{{Role: "user", Content: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Complete: status=%d message=%q err=%v", status, message, err)
+	}
+	if outcome.Thinking != "" {
+		t.Fatalf("expected no parsed fallback thinking, got %q", outcome.Thinking)
+	}
+	if outcome.Text != "<thinking>parsed plan</thinking>Visible answer" {
+		t.Fatalf("expected original text to remain unchanged, got %q", outcome.Text)
 	}
 }
 

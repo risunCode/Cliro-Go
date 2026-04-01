@@ -83,6 +83,15 @@ export const ENDPOINT_PRESETS: EndpointPreset[] = [
   }
 ]
 
+export const getEndpointPreset = (endpointID: string): EndpointPreset => {
+  return ENDPOINT_PRESETS.find((endpoint) => endpoint.id === endpointID) || ENDPOINT_PRESETS[0]
+}
+
+export const getEndpointRequestBody = (endpointID: string): string => {
+  const endpoint = getEndpointPreset(endpointID)
+  return endpoint.method === 'POST' ? endpoint.defaultBody : ''
+}
+
 export const buildEndpointTarget = (baseURL: string, routePath: string): string => {
   const trimmedBase = baseURL.trim().replace(/\/+$/, '')
   const normalizedPath = routePath.startsWith('/') ? routePath : `/${routePath}`
@@ -181,12 +190,22 @@ export const extractStructuredResponseFromSSE = (payload: string): TesterStructu
           break
         }
         case 'response.output_text.delta':
+          thinking += extractOpenAIReasoning(parsed)
           message += String(parsed.delta || '')
+          break
+        case 'response.output_text.done':
+          thinking += extractOpenAIReasoning(parsed)
+          if (!message) {
+            message = String(parsed.text || '').trim()
+          }
           break
         case 'response.completed': {
           const response = parsed.response
           if (response && typeof response === 'object') {
             const responseRecord = response as Record<string, unknown>
+            if (!thinking) {
+              thinking = extractOpenAIReasoning(responseRecord).trim()
+            }
             if (!message) {
               message = String(responseRecord.output_text || '').trim()
             }
@@ -237,6 +256,7 @@ export const extractStructuredResponseFromOpenAIJSON = (payload: Record<string, 
 
     const messageRecord = choiceRecord.message
     if (messageRecord && typeof messageRecord === 'object') {
+      thinking += extractOpenAIReasoning(messageRecord as Record<string, unknown>)
       const content = extractOpenAIMessageContent(messageRecord as Record<string, unknown>)
       if (content) {
         message += content
@@ -249,10 +269,10 @@ export const extractStructuredResponseFromOpenAIJSON = (payload: Record<string, 
       if (typeof delta.content === 'string') {
         message += delta.content
       }
-      if (typeof delta.reasoning === 'string') {
-        thinking += delta.reasoning
-      }
+      thinking += extractOpenAIReasoning(delta)
     }
+
+    thinking += extractOpenAIReasoning(choiceRecord)
 
     if (typeof choiceRecord.text === 'string') {
       message += choiceRecord.text
@@ -265,6 +285,16 @@ export const extractStructuredResponseFromOpenAIJSON = (payload: Record<string, 
     return null
   }
   return { thinking: normalizedThinking, message: normalizedMessage }
+}
+
+export const extractOpenAIReasoning = (payload: Record<string, unknown>): string => {
+  if (typeof payload.reasoning_content === 'string') {
+    return payload.reasoning_content
+  }
+  if (typeof payload.reasoning === 'string') {
+    return payload.reasoning
+  }
+  return ''
 }
 
 export const extractOpenAIMessageContent = (payload: Record<string, unknown>): string => {

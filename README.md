@@ -2,7 +2,7 @@
 
 CLIro-Go is a Wails desktop control plane for running a local OpenAI-compatible proxy across ChatGPT Codex and Kiro accounts. CLIro stands for CLIrouter.
 
-Current release: **v0.2.0**
+Current release: **v0.3.0**
 
 ## Screenshot
 
@@ -28,12 +28,12 @@ Current release: **v0.2.0**
 - OAuth flows for Codex plus Kiro device auth and Kiro social auth.
 - Token refresh, quota refresh, smart batch quota refresh, and force-refresh-all quota actions.
 - API Router controls for proxy runtime, security, routing policy, endpoint testing, and Cloudflared public access.
+- One-click CLI config sync in API Router for Claude Code, OpenCode, Kilo CLI, and Codex AI, including model selection from local `/v1/models` catalog.
 - Local CLI auth sync for Kilo, Opencode, and Codex CLI.
 
 ## Supported Models
 
-- Codex models are listed directly in `GET /v1/models`.
-- Kiro models are listed directly in `GET /v1/models`.
+- All models are listed directly in `GET /v1/models`.
 - Current Kiro catalog includes examples such as:
   - `claude-sonnet-4`
   - `claude-sonnet-4.5`
@@ -112,20 +112,14 @@ curl -X POST http://localhost:8095/v1/chat/completions \
 - Authorization mode requires the configured API key for all proxy routes.
 - Cloudflared public access is managed from the API Router tab and depends on the local proxy being online.
 - Smart `Refresh All Quotas` skips accounts still waiting for quota reset; `Force Refresh All Quotas` checks every configured account.
-- Claude Code / Anthropic compatibility notes, including `/v1/v1/...` route aliases and Kiro tool-turn normalization, are documented in `docs/claude-code-compat.md`.
-- Kiro reasoning-stream parity, compaction, truncation recovery, and prompt-shaping follow-up work are outlined in `docs/kiro-thinking-compaction-plan.md`.
+- Cross-protocol adapter audit and compatibility coverage are documented in `docs/audit-adapter-cross-protocol.md`.
+- Model aliasing behavior and examples are documented in `docs/feature-model-aliasing.md`.
 
 ## Attribution
 
 - Codex and Kiro icons/marks remain the property of their respective owners.
 - The CLIRO route app icon uses Icons8 artwork: `https://icons8.com/icons/set/route`
 
-## Inspired By
-- [9router](https://github.com/decolua/9router) For usage tab design
-- [Kiro-Go](https://github.com/Quorinex/Kiro-Go) Fake reasoning mode
-- [Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager) For Account and API route UI design
-
 ## Release Notes
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full `v0.2.0` change history.
-
+See [`CHANGELOG.md`](CHANGELOG.md) for the full `v0.3.0` change history.

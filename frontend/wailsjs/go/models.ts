@@ -1,47 +1,5 @@
-export namespace auth {
+export namespace authtoken {
 	
-	export class CodexAuthSessionView {
-	    sessionId: string;
-	    authUrl: string;
-	    callbackUrl: string;
-	    status: string;
-	    error?: string;
-	    accountId?: string;
-	    email?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new CodexAuthSessionView(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sessionId = source["sessionId"];
-	        this.authUrl = source["authUrl"];
-	        this.callbackUrl = source["callbackUrl"];
-	        this.status = source["status"];
-	        this.error = source["error"];
-	        this.accountId = source["accountId"];
-	        this.email = source["email"];
-	    }
-	}
-	export class CodexAuthStart {
-	    sessionId: string;
-	    authUrl: string;
-	    callbackUrl: string;
-	    status: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new CodexAuthStart(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sessionId = source["sessionId"];
-	        this.authUrl = source["authUrl"];
-	        this.callbackUrl = source["callbackUrl"];
-	        this.status = source["status"];
-	    }
-	}
 	export class CodexAuthSyncResult {
 	    targetPath: string;
 	    backupPath?: string;
@@ -94,64 +52,6 @@ export namespace auth {
 	        this.syncedExpiresAt = source["syncedExpiresAt"];
 	    }
 	}
-	export class KiroAuthSessionView {
-	    sessionId: string;
-	    authUrl: string;
-	    verificationUrl?: string;
-	    userCode?: string;
-	    expiresAt?: number;
-	    status: string;
-	    error?: string;
-	    accountId?: string;
-	    email?: string;
-	    authMethod?: string;
-	    provider?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new KiroAuthSessionView(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sessionId = source["sessionId"];
-	        this.authUrl = source["authUrl"];
-	        this.verificationUrl = source["verificationUrl"];
-	        this.userCode = source["userCode"];
-	        this.expiresAt = source["expiresAt"];
-	        this.status = source["status"];
-	        this.error = source["error"];
-	        this.accountId = source["accountId"];
-	        this.email = source["email"];
-	        this.authMethod = source["authMethod"];
-	        this.provider = source["provider"];
-	    }
-	}
-	export class KiroAuthStart {
-	    sessionId: string;
-	    authUrl: string;
-	    verificationUrl?: string;
-	    userCode: string;
-	    expiresAt?: number;
-	    status: string;
-	    authMethod?: string;
-	    provider?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new KiroAuthStart(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sessionId = source["sessionId"];
-	        this.authUrl = source["authUrl"];
-	        this.verificationUrl = source["verificationUrl"];
-	        this.userCode = source["userCode"];
-	        this.expiresAt = source["expiresAt"];
-	        this.status = source["status"];
-	        this.authMethod = source["authMethod"];
-	        this.provider = source["provider"];
-	    }
-	}
 	export class OpencodeAuthSyncResult {
 	    targetPath: string;
 	    fileExisted: boolean;
@@ -176,6 +76,53 @@ export namespace auth {
 	        this.provider = source["provider"];
 	        this.syncedExpires = source["syncedExpires"];
 	        this.syncedExpiresAt = source["syncedExpiresAt"];
+	    }
+	}
+
+}
+
+export namespace codex {
+	
+	export class AuthSessionView {
+	    sessionId: string;
+	    authUrl: string;
+	    callbackUrl: string;
+	    status: string;
+	    error?: string;
+	    accountId?: string;
+	    email?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthSessionView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.authUrl = source["authUrl"];
+	        this.callbackUrl = source["callbackUrl"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.accountId = source["accountId"];
+	        this.email = source["email"];
+	    }
+	}
+	export class AuthStart {
+	    sessionId: string;
+	    authUrl: string;
+	    callbackUrl: string;
+	    status: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthStart(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.authUrl = source["authUrl"];
+	        this.callbackUrl = source["callbackUrl"];
+	        this.status = source["status"];
 	    }
 	}
 
@@ -259,6 +206,7 @@ export namespace config {
 	    idToken?: string;
 	    clientId?: string;
 	    clientSecret?: string;
+	    authMethod?: string;
 	    expiresAt?: number;
 	    enabled: boolean;
 	    banned?: boolean;
@@ -296,6 +244,7 @@ export namespace config {
 	        this.idToken = source["idToken"];
 	        this.clientId = source["clientId"];
 	        this.clientSecret = source["clientSecret"];
+	        this.authMethod = source["authMethod"];
 	        this.expiresAt = source["expiresAt"];
 	        this.enabled = source["enabled"];
 	        this.banned = source["banned"];
@@ -382,13 +331,79 @@ export namespace config {
 
 }
 
+export namespace kiro {
+	
+	export class AuthSessionView {
+	    sessionId: string;
+	    authUrl: string;
+	    verificationUrl?: string;
+	    userCode?: string;
+	    expiresAt?: number;
+	    status: string;
+	    error?: string;
+	    accountId?: string;
+	    email?: string;
+	    authMethod?: string;
+	    provider?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthSessionView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.authUrl = source["authUrl"];
+	        this.verificationUrl = source["verificationUrl"];
+	        this.userCode = source["userCode"];
+	        this.expiresAt = source["expiresAt"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.accountId = source["accountId"];
+	        this.email = source["email"];
+	        this.authMethod = source["authMethod"];
+	        this.provider = source["provider"];
+	    }
+	}
+	export class AuthStart {
+	    sessionId: string;
+	    authUrl: string;
+	    verificationUrl?: string;
+	    userCode?: string;
+	    expiresAt?: number;
+	    status: string;
+	    authMethod?: string;
+	    provider?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthStart(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.authUrl = source["authUrl"];
+	        this.verificationUrl = source["verificationUrl"];
+	        this.userCode = source["userCode"];
+	        this.expiresAt = source["expiresAt"];
+	        this.status = source["status"];
+	        this.authMethod = source["authMethod"];
+	        this.provider = source["provider"];
+	    }
+	}
+
+}
+
 export namespace logger {
 	
 	export class Entry {
 	    timestamp: number;
 	    level: string;
 	    scope: string;
+	    event?: string;
+	    requestId?: string;
 	    message: string;
+	    fields?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Entry(source);
@@ -399,7 +414,10 @@ export namespace logger {
 	        this.timestamp = source["timestamp"];
 	        this.level = source["level"];
 	        this.scope = source["scope"];
+	        this.event = source["event"];
+	        this.requestId = source["requestId"];
 	        this.message = source["message"];
+	        this.fields = source["fields"];
 	    }
 	}
 
@@ -417,8 +435,6 @@ export namespace main {
 	    proxyApiKey?: string;
 	    authorizationMode?: boolean;
 	    schedulingMode?: string;
-	    circuitBreaker?: boolean;
-	    circuitSteps?: number[];
 	    proxyRunning: boolean;
 	    availableCount: number;
 	    accounts: config.Account[];
@@ -440,8 +456,6 @@ export namespace main {
 	        this.proxyApiKey = source["proxyApiKey"];
 	        this.authorizationMode = source["authorizationMode"];
 	        this.schedulingMode = source["schedulingMode"];
-	        this.circuitBreaker = source["circuitBreaker"];
-	        this.circuitSteps = source["circuitSteps"];
 	        this.proxyRunning = source["proxyRunning"];
 	        this.availableCount = source["availableCount"];
 	        this.accounts = this.convertValues(source["accounts"], config.Account);

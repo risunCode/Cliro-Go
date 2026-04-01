@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"cliro-go/internal/util"
 	"bufio"
 	"bytes"
 	"context"
@@ -12,9 +13,9 @@ import (
 	"time"
 
 	"cliro-go/internal/account"
-	adapterencode "cliro-go/internal/adapter/encode"
-	"cliro-go/internal/adapter/rules"
 	"cliro-go/internal/config"
+	contract "cliro-go/internal/contract"
+	"cliro-go/internal/contract/rules"
 	"cliro-go/internal/logger"
 	"cliro-go/internal/platform"
 	"cliro-go/internal/provider"
@@ -23,9 +24,10 @@ import (
 )
 
 const (
-	codexBaseURL  = "https://chatgpt.com/backend-api/codex"
-	codexVersion  = "0.117.0"
-	quotaCooldown = time.Hour
+	codexBaseURL          = "https://chatgpt.com/backend-api/codex"
+	codexVersion          = "0.117.0"
+	quotaCooldown         = time.Hour
+	defaultRequestTimeout = 5 * time.Minute
 )
 
 var codexUserAgent = platform.BuildOpencodeUserAgent()
@@ -86,7 +88,7 @@ type responseContent struct {
 func NewService(store *config.Manager, authManager accountAuth, accountPool *account.Pool, log *logger.Logger, httpClient *http.Client) *Service {
 	client := httpClient
 	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Minute}
+		client = newHTTPClient(defaultRequestTimeout)
 	}
 	return &Service{
 		store:      store,
@@ -97,11 +99,22 @@ func NewService(store *config.Manager, authManager accountAuth, accountPool *acc
 	}
 }
 
+func newHTTPClient(timeout time.Duration) *http.Client {
+	if timeout <= 0 {
+		timeout = defaultRequestTimeout
+	}
+	return &http.Client{Timeout: timeout}
+}
+
+func (s *Service) ExecuteFromIR(ctx context.Context, request contract.Request) (provider.CompletionOutcome, int, string, error) {
+	return s.Complete(ctx, provider.RequestFromIR(request))
+}
+
 func (s *Service) Complete(ctx context.Context, req provider.ChatRequest) (provider.CompletionOutcome, int, string, error) {
 	requestID := platform.RequestIDFromContext(ctx)
 	if strings.TrimSpace(req.Model) == "" {
 		s.recordRequestFailure()
-		s.log.Warn("proxy", fmt.Sprintf("request_id=%q provider=%q route=%q phase=%q reason=%q", requestID, "codex", strings.TrimSpace(req.RouteFamily), "rejected", "model is required"))
+		s.logProxyEvent("warn", "request.rejected", requestID, logger.String("route", strings.TrimSpace(req.RouteFamily)), logger.String("reason", "model is required"))
 		return provider.CompletionOutcome{}, http.StatusBadRequest, "model is required", fmt.Errorf("model is required")
 	}
 
@@ -109,7 +122,7 @@ func (s *Service) Complete(ctx context.Context, req provider.ChatRequest) (provi
 	if len(upstreamCandidates) == 0 {
 		s.recordRequestFailure()
 		reason := s.pool.ProviderUnavailableReason("codex")
-		s.log.Warn("proxy", fmt.Sprintf("request_id=%q provider=%q route=%q phase=%q reason=%q", requestID, "codex", strings.TrimSpace(req.RouteFamily), "rejected", reason))
+		s.logProxyEvent("warn", "request.rejected", requestID, logger.String("route", strings.TrimSpace(req.RouteFamily)), logger.String("reason", reason))
 		return provider.CompletionOutcome{}, http.StatusServiceUnavailable, reason, fmt.Errorf(reason)
 	}
 
@@ -118,7 +131,7 @@ func (s *Service) Complete(ctx context.Context, req provider.ChatRequest) (provi
 
 	for _, candidate := range upstreamCandidates {
 		accountLabel := config.AccountLabel(candidate)
-		s.log.Info("proxy", fmt.Sprintf("request_id=%q provider=%q route=%q phase=%q account=%q model=%q", requestID, "codex", strings.TrimSpace(req.RouteFamily), "attempt", accountLabel, strings.TrimSpace(req.Model)))
+		s.logProxyEvent("info", "request.attempt", requestID, logger.String("route", strings.TrimSpace(req.RouteFamily)), logger.String("account", accountLabel), logger.String("model", strings.TrimSpace(req.Model)))
 		account, err := s.auth.EnsureFreshAccount(candidate.ID)
 		if err != nil {
 			decision := provider.ClassifyHTTPFailure(http.StatusUnauthorized, err.Error())
@@ -156,7 +169,7 @@ func (s *Service) Complete(ctx context.Context, req provider.ChatRequest) (provi
 						account = refreshedAccount
 						accountLabel = config.AccountLabel(account)
 						refreshedAfterFailure = true
-						s.log.Info("auth", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q", requestID, "codex", "token_refreshed_retry", accountLabel))
+						s.logAuthEvent("info", "auth.token_refreshed_retry", requestID, logger.String("account", accountLabel))
 						continue
 					}
 					decision = provider.ClassifyHTTPFailure(http.StatusUnauthorized, refreshErr.Error())
@@ -202,7 +215,7 @@ func (s *Service) Complete(ctx context.Context, req provider.ChatRequest) (provi
 		lastMessage = "all codex accounts failed"
 	}
 	s.recordRequestFailure()
-	s.log.Warn("proxy", fmt.Sprintf("request_id=%q provider=%q route=%q phase=%q reason=%q", requestID, "codex", strings.TrimSpace(req.RouteFamily), "failed", lastMessage))
+	s.logProxyEvent("warn", "request.failed", requestID, logger.String("route", strings.TrimSpace(req.RouteFamily)), logger.String("reason", lastMessage))
 	return provider.CompletionOutcome{}, lastStatus, lastMessage, fmt.Errorf(lastMessage)
 }
 
@@ -274,7 +287,7 @@ func (s *Service) collectCompletion(body io.Reader, model string) (provider.Comp
 		case "response.output_item.done":
 			collectResponseItem(&textBuilder, &thinkingBuilder, &toolUses, seenToolUseIDs, event.Item)
 		case "response.completed":
-			out.ID = firstNonEmpty(event.Response.ID, out.ID)
+			out.ID = util.FirstNonEmpty(event.Response.ID, out.ID)
 			out.Usage.PromptTokens = event.Response.Usage.InputTokens
 			out.Usage.CompletionTokens = event.Response.Usage.OutputTokens
 			out.Usage.TotalTokens = event.Response.Usage.TotalTokens
@@ -282,7 +295,7 @@ func (s *Service) collectCompletion(body io.Reader, model string) (provider.Comp
 				collectResponseItem(&textBuilder, &thinkingBuilder, &toolUses, seenToolUseIDs, item)
 			}
 		case "error":
-			return out, fmt.Errorf(firstNonEmpty(event.Error.Message, "upstream error"))
+			return out, fmt.Errorf(util.FirstNonEmpty(event.Error.Message, "upstream error"))
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -291,7 +304,12 @@ func (s *Service) collectCompletion(body io.Reader, model string) (provider.Comp
 
 	out.Text = textBuilder.String()
 	out.Thinking = thinkingBuilder.String()
-	out.ThinkingSignature = adapterencode.StableThinkingSignature(out.Thinking)
+	out.ThinkingSignature = contract.StableThinkingSignature(out.Thinking)
+	if strings.TrimSpace(out.Thinking) != "" {
+		out.ThinkingSource = "native"
+	} else {
+		out.ThinkingSource = "none"
+	}
 	out.ToolUses = toolUses
 	if out.Usage.TotalTokens == 0 {
 		out.Usage.TotalTokens = out.Usage.PromptTokens + out.Usage.CompletionTokens
@@ -302,7 +320,7 @@ func (s *Service) collectCompletion(body io.Reader, model string) (provider.Comp
 func collectResponseItem(textBuilder *strings.Builder, thinkingBuilder *strings.Builder, toolUses *[]provider.ToolUse, seenToolUseIDs map[string]struct{}, item responseItem) {
 	switch strings.ToLower(strings.TrimSpace(item.Type)) {
 	case "function_call":
-		toolUseID := firstNonEmpty(strings.TrimSpace(item.CallID), strings.TrimSpace(item.ID))
+		toolUseID := util.FirstNonEmpty(strings.TrimSpace(item.CallID), strings.TrimSpace(item.ID))
 		toolName := strings.TrimSpace(item.Name)
 		if toolUseID == "" || toolName == "" {
 			return
@@ -324,7 +342,7 @@ func collectResponseItem(textBuilder *strings.Builder, thinkingBuilder *strings.
 		}
 	case "reasoning":
 		if thinkingBuilder.Len() == 0 {
-			if text := firstNonEmpty(responseItemText(item.Summary), responseItemText(item.Content)); text != "" {
+			if text := util.FirstNonEmpty(responseItemText(item.Summary), responseItemText(item.Content)); text != "" {
 				thinkingBuilder.WriteString(text)
 			}
 		}
@@ -398,7 +416,7 @@ func (s *Service) markSuccess(requestID string, accountID string, accountLabel s
 		if a.Quota.Status == "exhausted" || a.Quota.Status == "unknown" || a.Quota.Status == "degraded" {
 			a.Quota.Status = "healthy"
 			a.Quota.Summary = "Recent request succeeded."
-			a.Quota.Source = firstNonEmpty(a.Quota.Source, "runtime")
+			a.Quota.Source = util.FirstNonEmpty(a.Quota.Source, "runtime")
 			a.Quota.Error = ""
 			a.Quota.LastCheckedAt = now
 			for i := range a.Quota.Buckets {
@@ -417,66 +435,51 @@ func (s *Service) markSuccess(requestID string, accountID string, accountLabel s
 		stats.TotalTokens += usage.TotalTokens
 		stats.LastRequestAt = now
 	})
-	s.log.Info("proxy", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q prompt_tokens=%d completion_tokens=%d total_tokens=%d", requestID, "codex", "success", accountLabel, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens))
+	s.logProxyEvent("info", "request.success", requestID, logger.String("account", accountLabel), logger.Int("prompt_tokens", usage.PromptTokens), logger.Int("completion_tokens", usage.CompletionTokens), logger.Int("total_tokens", usage.TotalTokens))
 }
 
 func (s *Service) markTransientFailure(requestID string, accountID string, accountLabel string, err error) {
-	breakerEnabled := s.store.CircuitBreaker()
-	steps := s.store.CircuitSteps()
 	now := time.Now().Unix()
 	appliedCooldown := time.Duration(0)
-	appliedStep := 0
+	appliedFailures := 0
 	_ = s.store.UpdateAccount(accountID, func(a *config.Account) {
 		a.ErrorCount++
 		a.LastError = err.Error()
 		a.LastFailureAt = now
-		a.Quota.Status = firstNonEmpty(a.Quota.Status, "degraded")
+		a.Quota.Status = util.FirstNonEmpty(a.Quota.Status, "degraded")
 		a.Quota.Summary = err.Error()
-		a.Quota.Source = firstNonEmpty(a.Quota.Source, "runtime")
+		a.Quota.Source = util.FirstNonEmpty(a.Quota.Source, "runtime")
 		a.Quota.Error = err.Error()
 		a.Quota.LastCheckedAt = now
-		if !breakerEnabled {
-			a.ConsecutiveFailures = 0
-			a.CooldownUntil = 0
-			a.HealthState = config.AccountHealthReady
-			a.HealthReason = ""
-			return
-		}
 		nextFailures := a.ConsecutiveFailures + 1
-		appliedCooldown = provider.CircuitCooldown(steps, nextFailures)
-		appliedStep = nextFailures
+		appliedCooldown = provider.TransientCooldown(nextFailures)
+		appliedFailures = nextFailures
 		a.ConsecutiveFailures = nextFailures
 		a.CooldownUntil = now + int64(appliedCooldown/time.Second)
 		a.HealthState = config.AccountHealthCooldownTransient
 		a.HealthReason = err.Error()
 	})
-	if breakerEnabled && appliedCooldown > 0 {
-		cappedStep := appliedStep
-		if cappedStep > len(steps) {
-			cappedStep = len(steps)
-		}
-		s.log.Warn("proxy", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q reason=%q circuit_step=%d cooldown_seconds=%d", requestID, "codex", "attempt_failed", accountLabel, err.Error(), cappedStep, int(appliedCooldown/time.Second)))
-		return
+	if appliedCooldown > 0 {
+		s.logProxyEvent("warn", "request.attempt_failed", requestID, logger.String("account", accountLabel), logger.String("reason", err.Error()), logger.Int("failure_count", appliedFailures), logger.Int("cooldown_seconds", int(appliedCooldown/time.Second)))
 	}
-	s.log.Warn("proxy", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q reason=%q circuit_breaker=%t", requestID, "codex", "attempt_failed", accountLabel, err.Error(), breakerEnabled))
 }
 
 func (s *Service) markBanned(requestID string, accountID string, accountLabel string, reason string) {
 	_ = s.store.MarkAccountBanned(accountID, reason)
-	s.log.Warn("auth", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q reason=%q", requestID, "codex", "banned", accountLabel, reason))
+	s.logAuthEvent("warn", "account.banned", requestID, logger.String("account", accountLabel), logger.String("reason", reason))
 }
 
 func (s *Service) applyFailureDecision(requestID string, accountID string, accountLabel string, decision provider.FailureDecision) {
 	switch decision.Class {
 	case provider.FailureRequestShape:
-		s.log.Warn("proxy", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q reason=%q", requestID, "codex", "request_shape", accountLabel, decision.Message))
+		s.logProxyEvent("warn", "request.shape_invalid", requestID, logger.String("account", accountLabel), logger.String("reason", decision.Message))
 	case provider.FailureDurableDisabled:
 		if decision.BanAccount {
 			s.markBanned(requestID, accountID, accountLabel, decision.Message)
 			return
 		}
 		_ = s.store.MarkAccountDurablyDisabled(accountID, decision.Message)
-		s.log.Warn("auth", fmt.Sprintf("request_id=%q provider=%q phase=%q account=%q reason=%q", requestID, "codex", "durable_disabled", accountLabel, decision.Message))
+		s.logAuthEvent("warn", "account.durable_disabled", requestID, logger.String("account", accountLabel), logger.String("reason", decision.Message))
 	case provider.FailureQuotaCooldown:
 		cooldownUntil := time.Now().Add(decision.Cooldown).Unix()
 		_ = s.store.UpdateAccount(accountID, func(a *config.Account) {
@@ -495,109 +498,36 @@ func (s *Service) applyFailureDecision(requestID string, accountID string, accou
 				Buckets:       []config.QuotaBucket{{Name: "session", ResetAt: cooldownUntil, Status: "exhausted"}},
 			}
 		})
-		s.log.Warn("quota", fmt.Sprintf("request_id=%q provider=%q account=%q phase=%q reason=%q cooldown_until=%d", requestID, "codex", accountLabel, "cooldown", decision.Message, cooldownUntil))
+		s.logQuotaEvent("warn", "quota.cooldown", requestID, logger.String("account", accountLabel), logger.String("reason", decision.Message), logger.Int64("cooldown_until", cooldownUntil))
 	default:
 		s.markTransientFailure(requestID, accountID, accountLabel, fmt.Errorf(decision.Message))
 	}
 }
 
-func (s *Service) buildRequestPayload(req provider.ChatRequest) (map[string]any, error) {
-	input := make([]any, 0, len(req.Messages))
-	for _, msg := range req.Messages {
-		items := s.codexMessageItems(msg)
-		input = append(input, items...)
-	}
-	if len(input) == 0 {
-		return nil, fmt.Errorf("messages are empty")
-	}
-	payload := map[string]any{
-		"model":               req.Model,
-		"input":               input,
-		"instructions":        defaultCodexInstructions(),
-		"stream":              true,
-		"store":               false,
-		"include":             []string{"reasoning.encrypted_content"},
-		"parallel_tool_calls": true,
-	}
-	if req.Metadata != nil {
-		if previousResponseID, ok := req.Metadata["previousResponseID"].(string); ok && strings.TrimSpace(previousResponseID) != "" {
-			payload["previous_response_id"] = strings.TrimSpace(previousResponseID)
-		}
-		if parallelToolCalls, ok := req.Metadata["parallelToolCalls"].(bool); ok {
-			payload["parallel_tool_calls"] = parallelToolCalls
-		}
-		if instructions, ok := req.Metadata["instructions"].(string); ok && strings.TrimSpace(instructions) != "" {
-			payload["instructions"] = defaultCodexInstructions() + "\n\n## Request Context\n\n" + strings.TrimSpace(instructions)
-		}
-	}
-	if len(req.Tools) > 0 {
-		payload["tools"] = s.codexTools(req.Tools)
-	}
-	if req.ToolChoice != nil && req.ToolChoice != "" {
-		payload["tool_choice"] = req.ToolChoice
-	}
-	return payload, nil
+func (s *Service) logProxyEvent(level string, event string, requestID string, fields ...logger.Field) {
+	s.logEvent(level, "proxy", event, requestID, fields...)
 }
 
-func (s *Service) codexMessageItems(msg provider.Message) []any {
-	role := strings.ToLower(strings.TrimSpace(msg.Role))
-	switch role {
-	case "system", "developer":
-		text := strings.TrimSpace(messageToText(msg.Content))
-		if text == "" {
-			return nil
-		}
-		return []any{map[string]any{"type": "message", "role": "developer", "content": []any{map[string]any{"type": "input_text", "text": text}}}}
-	case "assistant":
-		items := make([]any, 0, 1+len(msg.ToolCalls))
-		if text := strings.TrimSpace(messageToText(msg.Content)); text != "" {
-			items = append(items, map[string]any{"type": "message", "role": "assistant", "content": []any{map[string]any{"type": "output_text", "text": text}}})
-		}
-		for _, toolCall := range msg.ToolCalls {
-			name := strings.TrimSpace(toolCall.Function.Name)
-			if name == "" {
-				continue
-			}
-			arguments := strings.TrimSpace(toolCall.Function.Arguments)
-			if arguments == "" {
-				arguments = "{}"
-			}
-			items = append(items, map[string]any{"type": "function_call", "call_id": firstNonEmpty(toolCall.ID, "toolu_"+uuid.NewString()[:8]), "name": name, "arguments": arguments})
-		}
-		return items
-	case "tool":
-		toolCallID := strings.TrimSpace(msg.ToolCallID)
-		if toolCallID == "" {
-			return nil
-		}
-		return []any{map[string]any{"type": "function_call_output", "call_id": toolCallID, "output": messageToText(msg.Content)}}
+func (s *Service) logAuthEvent(level string, event string, requestID string, fields ...logger.Field) {
+	s.logEvent(level, "auth", event, requestID, fields...)
+}
+
+func (s *Service) logQuotaEvent(level string, event string, requestID string, fields ...logger.Field) {
+	s.logEvent(level, "quota", event, requestID, fields...)
+}
+
+func (s *Service) logEvent(level string, scope string, event string, requestID string, fields ...logger.Field) {
+	eventFields := append([]logger.Field{logger.String("request_id", requestID), logger.String("provider", "codex")}, fields...)
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "warn":
+		s.log.WarnEvent(scope, event, eventFields...)
+	case "error":
+		s.log.ErrorEvent(scope, event, eventFields...)
+	case "debug":
+		s.log.DebugEvent(scope, event, eventFields...)
 	default:
-		text := strings.TrimSpace(messageToText(msg.Content))
-		if text == "" {
-			return nil
-		}
-		return []any{map[string]any{"type": "message", "role": "user", "content": []any{map[string]any{"type": "input_text", "text": text}}}}
+		s.log.InfoEvent(scope, event, eventFields...)
 	}
-}
-
-func (s *Service) codexTools(tools []provider.Tool) []any {
-	converted := make([]any, 0, len(tools))
-	for _, tool := range tools {
-		name := strings.TrimSpace(tool.Function.Name)
-		if name == "" {
-			continue
-		}
-		converted = append(converted, map[string]any{
-			"type":        "function",
-			"name":        name,
-			"description": strings.TrimSpace(tool.Function.Description),
-			"parameters":  tool.Function.Parameters,
-		})
-	}
-	if len(converted) == 0 {
-		return nil
-	}
-	return converted
 }
 
 func (s *Service) recordRequestFailure() {
@@ -607,36 +537,4 @@ func (s *Service) recordRequestFailure() {
 		stats.FailedRequests++
 		stats.LastRequestAt = now
 	})
-}
-
-func messageToText(content any) string {
-	switch typed := content.(type) {
-	case nil:
-		return ""
-	case string:
-		return typed
-	case []any:
-		parts := make([]string, 0, len(typed))
-		for _, item := range typed {
-			if object, ok := item.(map[string]any); ok {
-				text, _ := object["text"].(string)
-				if strings.TrimSpace(text) != "" {
-					parts = append(parts, text)
-				}
-			}
-		}
-		return strings.Join(parts, "\n")
-	default:
-		data, _ := json.Marshal(typed)
-		return strings.TrimSpace(string(data))
-	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }

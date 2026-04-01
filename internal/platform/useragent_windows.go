@@ -16,7 +16,7 @@ func getOSVersion() string {
 	type osVersionInfoEx struct {
 		dwOSVersionInfoSize uint32
 		dwMajorVersion      uint32
-		dwMinorVersion    uint32
+		dwMinorVersion      uint32
 		dwBuildNumber       uint32
 		dwPlatformId        uint32
 		szCSDVersion        [128]uint16

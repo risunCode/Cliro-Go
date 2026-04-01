@@ -1,4 +1,4 @@
-import { Bot, Cpu, Sparkles } from 'lucide-svelte'
+import { Bot, Command, Cpu, Sparkles } from 'lucide-svelte'
 import type { CliSyncAppID, LocalModelCatalogItem } from '@/features/router/types'
 
 export interface CliSyncCard {
@@ -11,6 +11,7 @@ export interface CliSyncCard {
 export const CLI_SYNC_CARDS: CliSyncCard[] = [
   { id: 'claude-code', label: 'Claude Code Config', icon: Sparkles, toneClass: 'text-violet-400' },
   { id: 'opencode-cli', label: 'OpenCode Config', icon: Bot, toneClass: 'text-amber-400' },
+  { id: 'kilo-cli', label: 'Kilo CLI Config', icon: Command, toneClass: 'text-emerald-400' },
   { id: 'codex-ai', label: 'Codex AI Config', icon: Cpu, toneClass: 'text-sky-400' }
 ]
 

@@ -1,37 +1,29 @@
 <script lang="ts">
+  import type { AppActions, AppOverlayState, SettingsActions } from '@/app/services/app-controller'
   import ToastViewport from '@/components/common/ToastViewport.svelte'
   import ConfigurationRecoveryModal from '@/app/modals/ConfigurationRecoveryModal.svelte'
   import UpdateRequiredModal from '@/app/modals/UpdateRequiredModal.svelte'
-  import type { StartupWarningEntry } from '@/app/services/startup-warnings'
 
-  export let showConfigurationErrorModal = false
-  export let startupWarnings: StartupWarningEntry[] = []
-  export let onDismissConfigurationErrorModal: () => void
-  export let onOpenDataDir: () => Promise<void>
-  export let showUpdatePrompt = false
-  export let currentVersion = ''
-  export let latestVersion = ''
-  export let releaseName = ''
-  export let releaseUrl = ''
-  export let onDismissUpdatePrompt: () => void
-  export let onOpenUpdateReleasePage: () => Promise<void>
+  export let overlays: AppOverlayState
+  export let appActions: AppActions
+  export let settingsActions: SettingsActions
 </script>
 
 <ToastViewport />
 
 <ConfigurationRecoveryModal
-  open={showConfigurationErrorModal}
-  warnings={startupWarnings}
-  on:dismiss={onDismissConfigurationErrorModal}
-  on:openDataDir={onOpenDataDir}
+  open={overlays.showConfigurationErrorModal}
+  warnings={overlays.startupWarnings}
+  on:dismiss={appActions.dismissConfigurationErrorModal}
+  on:openDataDir={settingsActions.openDataDir}
 />
 
 <UpdateRequiredModal
-  open={showUpdatePrompt}
-  {currentVersion}
-  {latestVersion}
-  {releaseName}
-  {releaseUrl}
-  on:dismiss={onDismissUpdatePrompt}
-  on:openRelease={onOpenUpdateReleasePage}
+  open={overlays.showUpdatePrompt}
+  currentVersion={overlays.updateInfo?.currentVersion || ''}
+  latestVersion={overlays.updateInfo?.latestVersion || ''}
+  releaseName={overlays.updateInfo?.releaseName || ''}
+  releaseUrl={overlays.updateInfo?.releaseUrl || ''}
+  on:dismiss={appActions.dismissUpdatePrompt}
+  on:openRelease={appActions.openUpdateReleasePage}
 />

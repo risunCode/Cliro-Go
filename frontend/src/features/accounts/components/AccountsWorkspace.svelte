@@ -1,27 +1,26 @@
 <script lang="ts">
-  import { Link2, Search, Upload } from 'lucide-svelte'
-  import codexIcon from '@/assets/icons/codex-icon.png'
-  import kiroIcon from '@/assets/icons/kiro-icon.png'
-  import Button from '@/components/common/Button.svelte'
-  import CollapsibleSurfaceSection from '@/components/common/CollapsibleSurfaceSection.svelte'
-  import ConnectPromptModal from '@/components/accounts/ConnectPromptModal.svelte'
-  import KiroConnectModal from '@/components/accounts/KiroConnectModal.svelte'
-  import AccountDetailModal from '@/components/accounts/AccountDetailModal.svelte'
-  import AccountSyncModal from '@/components/accounts/AccountSyncModal.svelte'
-  import BatchDeleteModal from '@/components/accounts/BatchDeleteModal.svelte'
-  import AccountsToolbar from '@/components/accounts/AccountsToolbar.svelte'
-  import AccountsGrid from '@/components/accounts/AccountsGrid.svelte'
-  import AccountsTable from '@/components/accounts/AccountsTable.svelte'
+  import AccountsConnectSection from '@/features/accounts/components/connect/AccountsConnectSection.svelte'
+  import AccountsListSection from '@/features/accounts/components/list/AccountsListSection.svelte'
+  import AccountsWorkspaceModals from '@/features/accounts/components/modals/AccountsWorkspaceModals.svelte'
   import { toastStore } from '@/shared/stores/toast'
   import { getErrorMessage } from '@/shared/lib/error'
+  import { accountsAuthApi } from '@/features/accounts/api/auth-api'
   import {
     computeAccountsViewState,
     isPendingAuthSession,
-    parseImportedAccounts,
     sanitizeSelectedIDs,
     shouldAttachPendingSession,
     shouldDismissPromptAfterSuccess
   } from '@/features/accounts/lib/workspace'
+  import { loadAccountsPreferences, saveAccountsPreferences } from '@/features/accounts/lib/preferences'
+  import {
+    buildAccountExportFileName,
+    createInitialWorkspaceState,
+    findAccountByID,
+    getBannedAccountIDs,
+    isBannedAccount,
+    readImportedAccountsFile
+  } from '@/features/accounts/lib/workspace-controller'
   import { runAccountSyncByTarget, syncTargetName } from '@/features/accounts/lib/sync'
   import type {
     Account,
@@ -36,33 +35,6 @@
   import { formatNumber } from '@/shared/lib/formatters'
   import { copyTextToClipboard, downloadJSONFile, hasClipboardWrite } from '@/shared/lib/browser'
   import { toggleSelectAllVisible, toggleSelectedID } from '@/features/accounts/lib/account'
-
-  const SHOW_EXHAUSTED_STORAGE_KEY = 'accounts-show-exhausted'
-  const SHOW_DISABLED_STORAGE_KEY = 'accounts-show-disabled'
-
-  const readStoredBoolean = (key: string, fallback: boolean): boolean => {
-    if (typeof window === 'undefined') {
-      return fallback
-    }
-
-    const stored = window.localStorage.getItem(key)
-    if (stored === 'true') {
-      return true
-    }
-    if (stored === 'false') {
-      return false
-    }
-
-    return fallback
-  }
-
-  const hasStoredBoolean = (key: string): boolean => {
-    if (typeof window === 'undefined') {
-      return false
-    }
-    const stored = window.localStorage.getItem(key)
-    return stored === 'true' || stored === 'false'
-  }
 
   export let accounts: Account[] = []
   export let busyAccountIds: string[] = []
@@ -87,37 +59,32 @@
   export let onRefreshAccountWithQuota: (accountId: string) => Promise<void>
   export let onDeleteAccount: (accountId: string) => Promise<void>
 
-  const isBannedAccount = (account: Account): boolean => {
-    return Boolean(account.banned)
-  }
+  const initialState = createInitialWorkspaceState(loadAccountsPreferences())
 
-  let selectedIds: string[] = []
-  let confirmRemoveAccountID = ''
-  let refreshingAccount = ''
-  let actionAccount = ''
-  let showConnectPrompt = false
-  let showKiroConnectModal = false
-  let connectPromptSessionID = ''
-  let kiroPromptSessionID = ''
-  let connectPanelOpen = true
-  let detailAccount: Account | null = null
-  let syncAccountID = ''
-  let syncTargetID: SyncTargetID = 'kilo-cli'
-  let syncBusy = false
-  let syncError = ''
-  let syncResult: AccountSyncResult | null = null
-  let showSyncModal = false
-  let showBulkDeleteModal = false
-  let showBannedDeleteModal = false
-  let searchQuery = ''
-  let selectedProvider = 'all'
-  let showExhausted = true
-  let showDisabled = true
-  let visibilityInitialized = false
-  let exhaustedDisabledCount = 0
-  let view: 'card' | 'table' = 'card'
-  let bulkBusy = false
-  let importInputEl: HTMLInputElement | null = null
+  let selectedIds = initialState.selectedIds
+  let confirmRemoveAccountID = initialState.confirmRemoveAccountID
+  let refreshingAccount = initialState.refreshingAccountID
+  let actionAccount = initialState.actionAccountID
+  let showConnectPrompt = initialState.showConnectPrompt
+  let showKiroConnectModal = initialState.showKiroConnectModal
+  let connectPromptSessionID = initialState.connectPromptSessionID
+  let kiroPromptSessionID = initialState.kiroPromptSessionID
+  let connectPanelOpen = initialState.connectPanelOpen
+  let detailAccount = initialState.detailAccount
+  let syncAccountID = initialState.syncAccountID
+  let syncTargetID: SyncTargetID = initialState.syncTargetID
+  let syncBusy = initialState.syncBusy
+  let syncError = initialState.syncError
+  let syncResult: AccountSyncResult | null = initialState.syncResult
+  let showSyncModal = initialState.showSyncModal
+  let showBulkDeleteModal = initialState.showBulkDeleteModal
+  let showBannedDeleteModal = initialState.showBannedDeleteModal
+  let searchQuery = initialState.searchQuery
+  let selectedProvider = initialState.selectedProvider
+  let showExhausted = initialState.showExhausted
+  let showDisabled = initialState.showDisabled
+  let view = initialState.view
+  let bulkBusy = initialState.bulkBusy
 
   $: viewState = computeAccountsViewState(accounts, selectedIds, selectedProvider, searchQuery, {
     showExhausted,
@@ -133,14 +100,24 @@
   $: exhaustedDisabledCount = viewState.exhaustedDisabledCount
   $: showExhaustedDisabled = showExhausted && showDisabled
   $: exhaustedDisabledFilterLabel = `${showExhaustedDisabled ? 'Hide' : 'Show'} Exhausted/Disabled [${formatNumber(exhaustedDisabledCount)}]`
-  $: bannedAccountIDs = accounts.filter((account) => isBannedAccount(account)).map((account) => account.id)
+  $: bannedAccountIDs = getBannedAccountIDs(accounts)
   $: bannedCount = bannedAccountIDs.length
-  $: syncAccount = accounts.find((account) => account.id === syncAccountID) || null
+  $: syncAccount = findAccountByID(accounts, syncAccountID)
+  $: canCopyLink = hasClipboardWrite()
+  $: saveAccountsPreferences({ showExhausted, showDisabled, view })
   $: {
     const nextSelectedIDs = sanitizeSelectedIDs(selectedIds, accounts)
     if (nextSelectedIDs.length !== selectedIds.length) {
       selectedIds = nextSelectedIDs
     }
+  }
+
+  $: if (kiroAuthSession?.status === 'error' && showKiroConnectModal) {
+    showKiroConnectModal = false
+  }
+
+  $: if (authSession?.status === 'error' && showConnectPrompt) {
+    showConnectPrompt = false
   }
 
   function handleToggleSelection(id: string) {
@@ -151,30 +128,10 @@
     selectedIds = toggleSelectAllVisible(selectedIds, visibleAccountIds, allVisibleSelected)
   }
 
-  function handleSearchInput(event: Event) {
-    const target = event.currentTarget as HTMLInputElement
-    searchQuery = target.value
-  }
-
-  const sanitizeFileSegment = (value: string | undefined, fallback: string): string => {
-    const normalized = (value || '').trim().toLowerCase()
-    if (!normalized) {
-      return fallback
-    }
-
-    const sanitized = normalized
-      .replace(/[@\s]+/g, '_')
-      .replace(/[^a-z0-9._-]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^[_\-.]+|[_\-.]+$/g, '')
-
-    return sanitized || fallback
-  }
-
-  const buildExportFileName = (account: Account): string => {
-    const provider = sanitizeFileSegment(account.provider, 'provider')
-    const identity = sanitizeFileSegment(account.email || account.id, 'account')
-    return `cliro_${provider}_${identity}.json`
+  function handleToggleExhaustedDisabled() {
+    const nextVisibility = !showExhaustedDisabled
+    showExhausted = nextVisibility
+    showDisabled = nextVisibility
   }
 
   async function handleRefreshWithQuota(accountId: string) {
@@ -205,10 +162,7 @@
   }
 
   function handleAccountInfo(accountId: string) {
-    const account = accounts.find((candidate) => candidate.id === accountId)
-    if (account) {
-      detailAccount = account
-    }
+    detailAccount = findAccountByID(accounts, accountId)
   }
 
   function closeDetailModal() {
@@ -216,8 +170,7 @@
   }
 
   function openSyncModal(accountID: string) {
-    const account = accounts.find((candidate) => candidate.id === accountID)
-    if (!account) {
+    if (!findAccountByID(accounts, accountID)) {
       return
     }
 
@@ -267,12 +220,12 @@
   }
 
   async function handleExportAccount(accountId: string) {
-    const account = accounts.find((candidate) => candidate.id === accountId)
+    const account = findAccountByID(accounts, accountId)
     if (!account) {
       return
     }
 
-    downloadJSONFile(account, buildExportFileName(account))
+    downloadJSONFile(account, buildAccountExportFileName(account))
   }
 
   async function handleBulkEnable() {
@@ -312,16 +265,17 @@
       return
     }
 
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      count: selectedAccounts.length,
-      accounts: selectedAccounts
-    }
-
-    downloadJSONFile(payload, `accounts-selected-${Date.now()}.json`)
+    downloadJSONFile(
+      {
+        exportedAt: new Date().toISOString(),
+        count: selectedAccounts.length,
+        accounts: selectedAccounts
+      },
+      `accounts-selected-${Date.now()}.json`
+    )
   }
 
-  async function handleBulkDelete() {
+  function handleBulkDelete() {
     if (selectedIds.length === 0 || bulkBusy) {
       return
     }
@@ -344,7 +298,7 @@
     }
   }
 
-  async function handleDeleteBannedAccounts() {
+  function handleDeleteBannedAccounts() {
     if (bannedCount === 0 || bulkBusy) {
       return
     }
@@ -388,34 +342,19 @@
     }
   }
 
-  function handleOpenImportPicker() {
+  async function handleImportFile(file: File) {
     if (bulkBusy) {
-      return
-    }
-    importInputEl?.click()
-  }
-
-  async function handleImportFile(event: Event) {
-    const target = event.currentTarget as HTMLInputElement
-    const file = target.files?.[0]
-    if (!file || bulkBusy) {
       return
     }
 
     bulkBusy = true
     try {
-      const text = await file.text()
-      const parsed = JSON.parse(text)
-      const importedAccounts = parseImportedAccounts(parsed)
-      if (importedAccounts.length === 0) {
-        throw new Error('No valid account records found in selected file.')
-      }
+      const importedAccounts = await readImportedAccountsFile(file)
       await onImportAccounts(importedAccounts)
     } catch (error) {
       toastStore.push('error', 'Import Failed', getErrorMessage(error, 'Unable to import account file.'))
     } finally {
       bulkBusy = false
-      target.value = ''
     }
   }
 
@@ -461,35 +400,37 @@
       return
     }
 
+    if (kiroAuthSession && kiroAuthSession.status !== 'pending') {
+      kiroAuthSession = null
+    }
+
     kiroPromptSessionID = ''
     showKiroConnectModal = true
   }
 
   const handleStartKiroDeviceAuth = async (): Promise<void> => {
-	showKiroConnectModal = true
-	try {
-		await onStartKiroConnect('device')
-	} catch {
-		showKiroConnectModal = false
-	}
+    showKiroConnectModal = true
+    try {
+      await onStartKiroConnect('device')
+    } catch {
+      showKiroConnectModal = false
+    }
   }
 
   const handleStartKiroGoogleAuth = async (): Promise<void> => {
-	showKiroConnectModal = true
-	try {
-		await onStartKiroConnect('google')
-	} catch {
-		showKiroConnectModal = false
-	}
+    try {
+      await onStartKiroConnect('google')
+    } catch {
+      showKiroConnectModal = false
+    }
   }
 
-  const handleStartKiroGitHubAuth = async (): Promise<void> => {
-	showKiroConnectModal = true
-	try {
-		await onStartKiroConnect('github')
-	} catch {
-		showKiroConnectModal = false
-	}
+  const handleStartKiroGithubAuth = async (): Promise<void> => {
+    try {
+      await onStartKiroConnect('github')
+    } catch {
+      showKiroConnectModal = false
+    }
   }
 
   const handleOpenKiroAuthLink = async (): Promise<void> => {
@@ -500,7 +441,7 @@
   }
 
   const handleCopyKiroAuthLink = async (): Promise<void> => {
-    if (!kiroAuthSession?.authUrl || !hasClipboardWrite()) {
+    if (!kiroAuthSession?.authUrl || !canCopyLink) {
       return
     }
 
@@ -508,7 +449,7 @@
   }
 
   const handleCopyKiroUserCode = async (): Promise<void> => {
-    if (!kiroAuthSession?.userCode || !hasClipboardWrite()) {
+    if (!kiroAuthSession?.userCode || !canCopyLink) {
       return
     }
 
@@ -536,11 +477,24 @@
   }
 
   const handleCopyAuthLink = async (): Promise<void> => {
-    if (!authSession?.authUrl || !hasClipboardWrite()) {
+    if (!authSession?.authUrl || !canCopyLink) {
       return
     }
 
     await copyTextToClipboard(authSession.authUrl)
+  }
+
+  const handleSubmitCodexAuthCode = async (event: CustomEvent<{ code: string }>): Promise<void> => {
+    const code = event.detail.code
+    if (!code || !authSession?.sessionId) {
+      return
+    }
+    try {
+      await accountsAuthApi.submitCodexAuthCode(authSession.sessionId, code)
+      toastStore.push('success', 'Authorization Code Submitted', 'Exchanging code for access token...')
+    } catch (error) {
+      toastStore.push('error', 'Code Submission Failed', getErrorMessage(error))
+    }
   }
 
   const handleCancelFromModal = async (): Promise<void> => {
@@ -573,275 +527,99 @@
     showKiroConnectModal = false
     kiroPromptSessionID = ''
   }
-
-  $: if (!visibilityInitialized) {
-    showExhausted = readStoredBoolean(SHOW_EXHAUSTED_STORAGE_KEY, true)
-    showDisabled = readStoredBoolean(SHOW_DISABLED_STORAGE_KEY, true)
-    visibilityInitialized = true
-  }
-
-  $: if (visibilityInitialized && typeof window !== 'undefined') {
-    if (!hasStoredBoolean(SHOW_EXHAUSTED_STORAGE_KEY)) {
-      showExhausted = true
-    }
-    if (!hasStoredBoolean(SHOW_DISABLED_STORAGE_KEY)) {
-      showDisabled = true
-    }
-  }
-
-  $: if (typeof window !== 'undefined') {
-    window.localStorage.setItem(SHOW_EXHAUSTED_STORAGE_KEY, String(showExhausted))
-    window.localStorage.setItem(SHOW_DISABLED_STORAGE_KEY, String(showDisabled))
-  }
-
 </script>
 
 <div class="accounts-page space-y-4">
-  <CollapsibleSurfaceSection
-    bind:open={connectPanelOpen}
-    icon={Link2}
-    title="Connect Accounts"
-    subtitle="Connect Codex or Kiro with OAuth/device flow."
-    pill={authWorking ? 'Connecting' : 'Auth'}
-    ariaLabel="Toggle connect accounts section"
-    className="accounts-connect-section p-0"
-    bodyClassName="accounts-connect-body"
-  >
-    <div class="accounts-connect-grid">
-      <article class="accounts-connect-card">
-        <div class="accounts-connect-card-head">
-          <span class="accounts-connect-provider-icon">
-            <img src={codexIcon} alt="Codex" loading="lazy" decoding="async" />
-          </span>
-          <div>
-            <p class="accounts-connect-card-title">Codex (OpenAI)</p>
-            <p class="accounts-connect-card-note">OAuth callback flow</p>
-          </div>
-        </div>
-        <Button variant="primary" size="sm" disabled={authWorking} on:click={() => void handleSelectConnectProvider('codex')}>
-          Connect Codex
-        </Button>
-      </article>
+  <AccountsConnectSection bind:open={connectPanelOpen} {authWorking} onSelectProvider={handleSelectConnectProvider} />
 
-      <article class="accounts-connect-card">
-        <div class="accounts-connect-card-head">
-          <span class="accounts-connect-provider-icon">
-            <img src={kiroIcon} alt="Kiro" loading="lazy" decoding="async" />
-          </span>
-          <div>
-            <p class="accounts-connect-card-title">Kiro</p>
-            <p class="accounts-connect-card-note">Device or social login</p>
-          </div>
-        </div>
-        <Button variant="secondary" size="sm" disabled={authWorking} on:click={() => void handleSelectConnectProvider('kiro')}>
-          Connect Kiro
-        </Button>
-      </article>
-    </div>
-
-    {#if authSession?.status === 'error'}
-      <div class="auth-session mt-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="session-pill status-error">error</span>
-          <span class="text-[11px] text-text-secondary">Session: {authSession.sessionId || '-'}</span>
-        </div>
-        {#if authSession.error}
-          <p class="mt-1 text-[11px] text-error">{authSession.error}</p>
-        {/if}
-      </div>
-    {/if}
-
-    {#if kiroAuthSession?.status === 'error'}
-      <div class="auth-session mt-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="session-pill status-error">error</span>
-          <span class="text-[11px] text-text-secondary">Kiro Session: {kiroAuthSession.sessionId || '-'}</span>
-        </div>
-        {#if kiroAuthSession.error}
-          <p class="mt-1 text-[11px] text-error">{kiroAuthSession.error}</p>
-        {/if}
-      </div>
-    {/if}
-  </CollapsibleSurfaceSection>
-
-  <section class="rounded-sm border border-border bg-surface p-4">
-    <input bind:this={importInputEl} type="file" accept=".json,application/json" class="hidden" on:change={handleImportFile} />
-
-    <div class="mb-3">
-      <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p class="text-sm font-semibold text-text-primary">Accounts</p>
-          <p class="text-xs text-text-secondary">Total {formatNumber(accounts.length)} accounts in pool.</p>
-        </div>
-
-        <div class="flex w-full items-center gap-2 lg:w-auto">
-          <button
-            type="button"
-            class={`selection-btn tone-warning filter-toggle-btn ${showExhaustedDisabled ? '' : 'selection-btn-active'}`}
-            on:click={() => {
-              const nextVisibility = !showExhaustedDisabled
-              showExhausted = nextVisibility
-              showDisabled = nextVisibility
-            }}
-          >
-            <span>{exhaustedDisabledFilterLabel}</span>
-          </button>
-
-          <Button on:click={handleOpenImportPicker} disabled={bulkBusy} variant="secondary" size="sm" className="whitespace-nowrap">
-            <Upload size={14} class="mr-1" />
-            Import
-          </Button>
-
-          <div class="relative w-full lg:w-80">
-            <Search class="accounts-search-icon absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              on:input={handleSearchInput}
-              placeholder="Search by email, account ID, provider"
-              class="accounts-search-input ui-control-input ui-control-select-sm w-full bg-surface py-2 pl-9 pr-3 text-[13px]"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <AccountsToolbar
-      accountsTotal={accounts.length}
-      {accountsByProvider}
-      {selectedProvider}
-      selectedCount={selectedIds.length}
-      {selectedEnabledCount}
-      {hasVisibleAccounts}
-      {allVisibleSelected}
-      {bannedCount}
-      {view}
-      {refreshingAllQuotas}
-      {bulkBusy}
-      on:providerChange={(event) => {
-        selectedProvider = event.detail
-      }}
-      on:viewChange={(event) => {
-        view = event.detail
-      }}
-      on:toggleSelectAllVisible={handleToggleSelectAllVisible}
-      on:refreshAllQuotas={onRefreshAllQuotas}
-      on:forceRefreshAllQuotas={handleForceRefreshAllQuotas}
-      on:bulkEnable={handleBulkEnable}
-      on:bulkDisable={handleBulkDisable}
-      on:bulkExport={handleBulkExport}
-      on:bulkDelete={handleBulkDelete}
-      on:bulkDeleteBanned={handleDeleteBannedAccounts}
-    />
-
-    {#if filteredAccounts.length === 0}
-      <div class="empty-state">No accounts match your current filters.</div>
-    {:else if view === 'card'}
-      <AccountsGrid
-        accounts={filteredAccounts}
-        {selectedIds}
-        {busyAccountIds}
-        refreshingAccountID={refreshingAccount}
-        {confirmRemoveAccountID}
-        actionAccountID={actionAccount}
-        onToggleSelection={handleToggleSelection}
-        {onToggleAccount}
-        onStartSync={openSyncModal}
-        onInfo={handleAccountInfo}
-        onRefreshWithQuota={handleRefreshWithQuota}
-        onExport={handleExportAccount}
-        onStartRemove={handleRemoveStart}
-        onConfirmRemove={handleRemoveConfirm}
-        onCancelRemove={handleRemoveCancel}
-      />
-    {:else}
-      <AccountsTable
-        accounts={filteredAccounts}
-        {selectedIds}
-        {busyAccountIds}
-        {allVisibleSelected}
-        refreshingAccountID={refreshingAccount}
-        {confirmRemoveAccountID}
-        actionAccountID={actionAccount}
-        onToggleSelection={handleToggleSelection}
-        onToggleSelectAllVisible={handleToggleSelectAllVisible}
-        {onToggleAccount}
-        onStartSync={openSyncModal}
-        onInfo={handleAccountInfo}
-        onRefreshWithQuota={handleRefreshWithQuota}
-        onExport={handleExportAccount}
-        onStartRemove={handleRemoveStart}
-        onConfirmRemove={handleRemoveConfirm}
-        onCancelRemove={handleRemoveCancel}
-      />
-    {/if}
-  </section>
-
-  <ConnectPromptModal
-    open={showConnectPrompt}
-    authUrl={authSession?.authUrl || ''}
-    busy={authWorking}
-    pending={isPendingAuthSession(authSession)}
-    canCopyLink={hasClipboardWrite()}
-    on:openLink={handleOpenAuthLink}
-    on:copyLink={handleCopyAuthLink}
-    on:dismiss={handleDismissModal}
-    on:cancel={handleCancelFromModal}
+  <AccountsListSection
+    {accounts}
+    {accountsByProvider}
+    {filteredAccounts}
+    {selectedIds}
+    {busyAccountIds}
+    {allVisibleSelected}
+    {selectedProvider}
+    {selectedEnabledCount}
+    {hasVisibleAccounts}
+    {bannedCount}
+    {view}
+    {refreshingAllQuotas}
+    {bulkBusy}
+    {searchQuery}
+    {showExhaustedDisabled}
+    {exhaustedDisabledFilterLabel}
+    refreshingAccountID={refreshingAccount}
+    {confirmRemoveAccountID}
+    actionAccountID={actionAccount}
+    onToggleSelection={handleToggleSelection}
+    {onToggleAccount}
+    onStartSync={openSyncModal}
+    onInfo={handleAccountInfo}
+    onRefreshWithQuota={handleRefreshWithQuota}
+    onExport={handleExportAccount}
+    onStartRemove={handleRemoveStart}
+    onConfirmRemove={handleRemoveConfirm}
+    onCancelRemove={handleRemoveCancel}
+    on:providerChange={(event) => {
+      selectedProvider = event.detail
+    }}
+    on:viewChange={(event) => {
+      view = event.detail
+    }}
+    on:toggleExhaustedDisabled={handleToggleExhaustedDisabled}
+    on:toggleSelectAllVisible={handleToggleSelectAllVisible}
+    on:refreshAllQuotas={onRefreshAllQuotas}
+    on:forceRefreshAllQuotas={handleForceRefreshAllQuotas}
+    on:bulkEnable={handleBulkEnable}
+    on:bulkDisable={handleBulkDisable}
+    on:bulkExport={handleBulkExport}
+    on:bulkDelete={handleBulkDelete}
+    on:bulkDeleteBanned={handleDeleteBannedAccounts}
+    on:searchChange={(event) => {
+      searchQuery = event.detail
+    }}
+    on:importFile={(event) => void handleImportFile(event.detail)}
   />
 
-  <KiroConnectModal
-    open={showKiroConnectModal}
-    authUrl={kiroAuthSession?.authUrl || ''}
-    userCode={kiroAuthSession?.userCode || ''}
-    authMethod={kiroAuthSession?.authMethod || ''}
-    provider={kiroAuthSession?.provider || ''}
-    busy={authWorking}
-    pending={isPendingAuthSession(kiroAuthSession)}
-    canCopyLink={hasClipboardWrite()}
-    on:startDevice={handleStartKiroDeviceAuth}
-    on:startGoogle={handleStartKiroGoogleAuth}
-    on:startGitHub={handleStartKiroGitHubAuth}
-    on:openLink={handleOpenKiroAuthLink}
-    on:copyLink={handleCopyKiroAuthLink}
-    on:copyCode={handleCopyKiroUserCode}
-    on:dismiss={handleDismissKiroModal}
-    on:cancel={handleCancelKiroModal}
-  />
-
-  <AccountDetailModal open={Boolean(detailAccount)} account={detailAccount} on:dismiss={closeDetailModal} />
-
-  <AccountSyncModal
-    open={showSyncModal}
-    account={syncAccount}
-    loading={syncBusy}
-    error={syncError}
-    result={syncResult}
-    selectedTargetID={syncTargetID}
-    on:close={closeSyncModal}
-    on:confirm={handleConfirmSync}
-  />
-
-  <BatchDeleteModal
-    open={showBulkDeleteModal}
-    count={selectedIds.length}
-    busy={bulkBusy}
-    title="Delete Selected Accounts"
-    description="This action will remove selected records from local storage."
-    summaryLabel="selected account(s)"
-    confirmLabel="Delete Selected"
-    on:cancel={handleCancelBulkDelete}
-    on:confirm={handleConfirmBulkDelete}
-  />
-
-  <BatchDeleteModal
-    open={showBannedDeleteModal}
-    count={bannedCount}
-    busy={bulkBusy}
-    title="Delete Banned Accounts"
-    description="This action removes all accounts explicitly marked as banned."
-    summaryLabel="banned account(s)"
-    confirmLabel="Delete Banned"
-    on:cancel={handleCancelDeleteBanned}
-    on:confirm={handleConfirmDeleteBanned}
+  <AccountsWorkspaceModals
+    {showConnectPrompt}
+    {showKiroConnectModal}
+    {authSession}
+    {kiroAuthSession}
+    {authWorking}
+    {canCopyLink}
+    {detailAccount}
+    {showSyncModal}
+    {syncAccount}
+    {syncBusy}
+    {syncError}
+    {syncResult}
+    {syncTargetID}
+    {showBulkDeleteModal}
+    selectedCount={selectedIds.length}
+    {showBannedDeleteModal}
+    {bannedCount}
+    {bulkBusy}
+    onOpenAuthLink={handleOpenAuthLink}
+    onCopyAuthLink={handleCopyAuthLink}
+    onSubmitCodexAuthCode={handleSubmitCodexAuthCode}
+    onDismissModal={handleDismissModal}
+    onCancelFromModal={handleCancelFromModal}
+    onStartKiroDeviceAuth={handleStartKiroDeviceAuth}
+    onStartKiroGoogleAuth={handleStartKiroGoogleAuth}
+    onStartKiroGithubAuth={handleStartKiroGithubAuth}
+    onOpenKiroAuthLink={handleOpenKiroAuthLink}
+    onCopyKiroAuthLink={handleCopyKiroAuthLink}
+    onCopyKiroUserCode={handleCopyKiroUserCode}
+    onDismissKiroModal={handleDismissKiroModal}
+    onCancelKiroModal={handleCancelKiroModal}
+    onCloseDetailModal={closeDetailModal}
+    onCloseSyncModal={closeSyncModal}
+    onConfirmSync={handleConfirmSync}
+    onCancelBulkDelete={handleCancelBulkDelete}
+    onConfirmBulkDelete={handleConfirmBulkDelete}
+    onCancelDeleteBanned={handleCancelDeleteBanned}
+    onConfirmDeleteBanned={handleConfirmDeleteBanned}
   />
 </div>

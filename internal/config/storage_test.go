@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,6 +56,137 @@ func TestLoadSettings_RecoversCorruptedJSON(t *testing.T) {
 	}
 	if !bytes.Contains(migrated, []byte(`"proxyPort": 8095`)) {
 		t.Fatalf("expected recovered settings file, got %s", string(migrated))
+	}
+}
+
+func TestLoadSettings_AppliesThinkingDefaultsToLegacyConfig(t *testing.T) {
+	dataDir := t.TempDir()
+	storage, err := NewStorage(dataDir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	configPath := filepath.Join(dataDir, "config.json")
+	writeTestFile(t, configPath, []byte(`{"proxyPort":9001,"allowLan":true}`))
+
+	settings, warnings, err := storage.LoadSettings()
+	if err != nil {
+		t.Fatalf("load settings: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %+v", warnings)
+	}
+	if settings.ProxyPort != 9001 || !settings.AllowLAN {
+		t.Fatalf("unexpected legacy settings: %+v", settings)
+	}
+	if settings.Thinking.Suffix != defaultThinkingSuffix || settings.Thinking.Mode != ThinkingModeAuto {
+		t.Fatalf("unexpected thinking defaults: %+v", settings.Thinking)
+	}
+	if !settings.Thinking.RequireAnthropicSignature || settings.Thinking.ForceForAnthropic || settings.Thinking.MaxForcedThinkingTokens != defaultMaxForcedThinkingTokens {
+		t.Fatalf("unexpected thinking controls: %+v", settings.Thinking)
+	}
+	if len(settings.Thinking.FallbackTags) != 2 || settings.Thinking.FallbackTags[0] != "<thinking>" || settings.Thinking.FallbackTags[1] != "<think>" {
+		t.Fatalf("unexpected fallback tags: %+v", settings.Thinking.FallbackTags)
+	}
+}
+
+func TestLoadSettings_PreservesExplicitThinkingSettings(t *testing.T) {
+	dataDir := t.TempDir()
+	storage, err := NewStorage(dataDir)
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+
+	want := AppSettings{
+		ProxyPort:      9123,
+		AllowLAN:       true,
+		AutoStartProxy: false,
+		SchedulingMode: string(SchedulingModePerformance),
+		Cloudflared: CloudflaredSettings{
+			Enabled:  true,
+			Mode:     CloudflaredModeAuth,
+			Token:    " token ",
+			UseHTTP2: false,
+		},
+		Thinking: ThinkingSettings{
+			Suffix:                    "  -ponder  ",
+			Mode:                      ThinkingModeForce,
+			FallbackTags:              []string{"  <ponder>  ", "<thinking>", "<ponder>"},
+			RequireAnthropicSignature: false,
+			ForceForAnthropic:         true,
+			MaxForcedThinkingTokens:   2048,
+		},
+	}
+	if err := storage.SaveSettings(want); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	settings, warnings, err := storage.LoadSettings()
+	if err != nil {
+		t.Fatalf("load settings: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %+v", warnings)
+	}
+	if settings.Thinking.Suffix != "-ponder" || settings.Thinking.Mode != ThinkingModeForce {
+		t.Fatalf("unexpected thinking settings: %+v", settings.Thinking)
+	}
+	if settings.Thinking.RequireAnthropicSignature || !settings.Thinking.ForceForAnthropic || settings.Thinking.MaxForcedThinkingTokens != 2048 {
+		t.Fatalf("unexpected thinking controls: %+v", settings.Thinking)
+	}
+	if len(settings.Thinking.FallbackTags) != 2 || settings.Thinking.FallbackTags[0] != "<ponder>" || settings.Thinking.FallbackTags[1] != "<thinking>" {
+		t.Fatalf("unexpected normalized fallback tags: %+v", settings.Thinking.FallbackTags)
+	}
+	if settings.Cloudflared.Token != "token" {
+		t.Fatalf("expected cloudflared token trim, got %q", settings.Cloudflared.Token)
+	}
+}
+
+func TestManager_PersistsThinkingDefaultsWhenSavingLegacyConfig(t *testing.T) {
+	dataDir := t.TempDir()
+	configPath := filepath.Join(dataDir, "config.json")
+	writeTestFile(t, configPath, []byte(`{"proxyPort":9001,"autoStartProxy":false}`))
+
+	manager, err := NewManager(dataDir)
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+	if err := manager.SetAllowLAN(true); err != nil {
+		t.Fatalf("set allow LAN: %v", err)
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read persisted config: %v", err)
+	}
+
+	var persisted map[string]any
+	if err := json.Unmarshal(raw, &persisted); err != nil {
+		t.Fatalf("unmarshal persisted config: %v", err)
+	}
+	thinkingValue, ok := persisted["thinking"]
+	if !ok {
+		t.Fatalf("expected thinking settings to be persisted, got %s", string(raw))
+	}
+	thinking, ok := thinkingValue.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected thinking payload type: %T", thinkingValue)
+	}
+	if thinking["suffix"] != defaultThinkingSuffix {
+		t.Fatalf("suffix = %v", thinking["suffix"])
+	}
+	if thinking["mode"] != string(ThinkingModeAuto) {
+		t.Fatalf("mode = %v", thinking["mode"])
+	}
+	if thinking["requireAnthropicSignature"] != true {
+		t.Fatalf("requireAnthropicSignature = %v", thinking["requireAnthropicSignature"])
+	}
+	if thinking["maxForcedThinkingTokens"] != float64(defaultMaxForcedThinkingTokens) {
+		t.Fatalf("maxForcedThinkingTokens = %v", thinking["maxForcedThinkingTokens"])
+	}
+	tags, ok := thinking["fallbackTags"].([]any)
+	if !ok || len(tags) != 2 || tags[0] != "<thinking>" || tags[1] != "<think>" {
+		t.Fatalf("unexpected fallbackTags = %#v", thinking["fallbackTags"])
 	}
 }
 

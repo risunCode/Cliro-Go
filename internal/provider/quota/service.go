@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"cliro-go/internal/util"
 	"context"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"cliro-go/internal/auth"
 	"cliro-go/internal/config"
 	"cliro-go/internal/logger"
+	coreprovider "cliro-go/internal/provider"
 	codexprovider "cliro-go/internal/provider/codex"
 	kiroprovider "cliro-go/internal/provider/kiro"
 )
@@ -77,7 +79,7 @@ func (s *Service) RefreshQuota(accountID string) (config.Account, error) {
 
 	fresh, err := s.auth.EnsureFreshAccount(accountID)
 	if err != nil {
-		quota := synthesizeQuota(account, err)
+		quota := coreprovider.SynthesizeQuota(account, err)
 		blockedMsg, blocked := blockedAccountMessageFromError(err)
 		_ = s.store.UpdateAccount(accountID, func(a *config.Account) {
 			a.Quota = quota
@@ -131,16 +133,16 @@ func (s *Service) applyQuotaSnapshot(accountID string, quota config.QuotaInfo, r
 			return
 		}
 		if shouldApplyQuotaCooldown(quota) {
-			cooldownUntil := quotaResetAt(quota)
+			cooldownUntil := config.QuotaResetAt(quota)
 			if cooldownUntil <= time.Now().Unix() {
 				cooldownUntil = time.Now().Add(time.Hour).Unix()
 			}
 			a.CooldownUntil = cooldownUntil
 			a.HealthState = config.AccountHealthCooldownQuota
-			a.HealthReason = firstNonEmpty(strings.TrimSpace(quota.Summary), "Quota exhausted")
+			a.HealthReason = util.FirstNonEmpty(strings.TrimSpace(quota.Summary), "Quota exhausted")
 			a.LastFailureAt = time.Now().Unix()
 			if strings.TrimSpace(a.LastError) == "" {
-				a.LastError = firstNonEmpty(strings.TrimSpace(quota.Summary), "Quota exhausted")
+				a.LastError = util.FirstNonEmpty(strings.TrimSpace(quota.Summary), "Quota exhausted")
 			}
 		} else if a.HealthState == config.AccountHealthCooldownQuota {
 			a.HealthState = config.AccountHealthReady
@@ -208,7 +210,7 @@ func (s *Service) refreshAllQuotas(force bool) error {
 			for account := range jobs {
 				if _, err := s.RefreshQuota(account.ID); err != nil {
 					failuresMu.Lock()
-					failures = append(failures, firstNonEmpty(account.Email, account.ID)+": "+err.Error())
+					failures = append(failures, util.FirstNonEmpty(account.Email, account.ID)+": "+err.Error())
 					failuresMu.Unlock()
 				}
 			}
@@ -237,17 +239,17 @@ func (s *Service) logQuotaRefreshBatch(force bool, total int, eligible int, skip
 	if force {
 		mode = "force"
 	}
-	parts := []string{fmt.Sprintf("quota batch refresh mode=%s total=%d eligible=%d", mode, total, eligible)}
+	fields := []logger.Field{logger.String("mode", mode), logger.Int("total", total), logger.Int("eligible", eligible)}
 	if skipped["quota_cooldown"] > 0 {
-		parts = append(parts, fmt.Sprintf("skipped_quota_cooldown=%d", skipped["quota_cooldown"]))
+		fields = append(fields, logger.Int("skipped_quota_cooldown", skipped["quota_cooldown"]))
 	}
 	if skipped["disabled"] > 0 {
-		parts = append(parts, fmt.Sprintf("skipped_disabled=%d", skipped["disabled"]))
+		fields = append(fields, logger.Int("skipped_disabled", skipped["disabled"]))
 	}
 	if skipped["banned"] > 0 {
-		parts = append(parts, fmt.Sprintf("skipped_banned=%d", skipped["banned"]))
+		fields = append(fields, logger.Int("skipped_banned", skipped["banned"]))
 	}
-	s.log.Info("quota", strings.Join(parts, " "))
+	s.log.InfoEvent("quota", "batch.refresh", fields...)
 }
 
 func isKiroAccount(account config.Account) bool {
@@ -270,7 +272,7 @@ func validateQuotaProvider(account config.Account) error {
 }
 
 func blockedAccountMessageFromQuota(quota config.QuotaInfo) (string, bool) {
-	sourceMessage := firstNonEmpty(strings.TrimSpace(quota.Error), strings.TrimSpace(quota.Summary))
+	sourceMessage := util.FirstNonEmpty(strings.TrimSpace(quota.Error), strings.TrimSpace(quota.Summary))
 	if sourceMessage == "" {
 		return "", false
 	}
@@ -307,16 +309,6 @@ func shouldApplyQuotaCooldown(quota config.QuotaInfo) bool {
 	return false
 }
 
-func quotaResetAt(quota config.QuotaInfo) int64 {
-	var latest int64
-	for _, bucket := range quota.Buckets {
-		if bucket.ResetAt > latest {
-			latest = bucket.ResetAt
-		}
-	}
-	return latest
-}
-
 func shouldSkipBatchQuotaRefresh(account config.Account, now int64) (bool, string) {
 	if account.Banned || account.HealthState == config.AccountHealthBanned {
 		return true, "banned"
@@ -325,57 +317,13 @@ func shouldSkipBatchQuotaRefresh(account config.Account, now int64) (bool, strin
 		return true, "disabled"
 	}
 	if shouldApplyQuotaCooldown(account.Quota) {
-		if resetAt := quotaResetAt(account.Quota); resetAt > now {
+		if resetAt := config.QuotaResetAt(account.Quota); resetAt > now {
 			return true, "quota_cooldown"
 		}
 	}
 	return false, ""
 }
 
-func synthesizeQuota(account config.Account, err error) config.QuotaInfo {
-	now := time.Now().Unix()
-	info := config.QuotaInfo{
-		Status:        "healthy",
-		Summary:       "Quota endpoint not resolved yet; using local runtime state.",
-		Source:        "runtime",
-		LastCheckedAt: now,
-	}
-	if err != nil {
-		info.Error = err.Error()
-		info.Status = "unknown"
-	}
-	if account.CooldownUntil > now {
-		info.Status = "exhausted"
-		info.Summary = firstNonEmpty(account.LastError, "Quota cooldown is active.")
-		info.Buckets = []config.QuotaBucket{{
-			Name:    "session",
-			ResetAt: account.CooldownUntil,
-			Status:  "exhausted",
-		}, {
-			Name:   "weekly",
-			Status: "unknown",
-		}}
-		return info
-	}
-	if account.LastError != "" {
-		info.Status = "degraded"
-		info.Summary = account.LastError
-	}
-	if len(account.Quota.Buckets) > 0 {
-		info.Buckets = append([]config.QuotaBucket(nil), account.Quota.Buckets...)
-	}
-	return info
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
-}
 
 func maxInt(a, b int) int {
 	if a > b {

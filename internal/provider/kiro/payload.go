@@ -5,14 +5,95 @@ import (
 	"strings"
 
 	"cliro-go/internal/config"
+	contract "cliro-go/internal/contract"
 	provider "cliro-go/internal/provider"
+	thinkingctrl "cliro-go/internal/provider/thinking"
 
 	"github.com/google/uuid"
 )
 
 var errMessagesEmpty = fmt.Errorf("messages are empty")
 
-func buildRequestPayload(req provider.ChatRequest, account config.Account) (requestPayload, error) {
+const forcedThinkingModeTag = "<thinking_mode>enabled</thinking_mode>"
+
+type requestPayload struct {
+	ConversationState conversationState `json:"conversationState"`
+	ProfileARN        string            `json:"profileArn,omitempty"`
+	InferenceConfig   *inferenceConfig  `json:"inferenceConfig,omitempty"`
+}
+
+type conversationState struct {
+	AgentContinuationID string           `json:"agentContinuationId,omitempty"`
+	AgentTaskType       string           `json:"agentTaskType,omitempty"`
+	ChatTriggerType     string           `json:"chatTriggerType"`
+	ConversationID      string           `json:"conversationId"`
+	CurrentMessage      currentMessage   `json:"currentMessage"`
+	History             []historyMessage `json:"history,omitempty"`
+}
+
+type inferenceConfig struct {
+	MaxTokens   *int     `json:"maxTokens,omitempty"`
+	Temperature *float64 `json:"temperature,omitempty"`
+	TopP        *float64 `json:"topP,omitempty"`
+}
+
+type currentMessage struct {
+	UserInputMessage userInputMessage `json:"userInputMessage"`
+}
+
+type historyMessage struct {
+	UserInputMessage         *userInputMessage         `json:"userInputMessage,omitempty"`
+	AssistantResponseMessage *assistantResponseMessage `json:"assistantResponseMessage,omitempty"`
+}
+
+type userInputMessage struct {
+	Content                 string                   `json:"content"`
+	ModelID                 string                   `json:"modelId"`
+	Origin                  string                   `json:"origin"`
+	UserInputMessageContext *userInputMessageContext `json:"userInputMessageContext,omitempty"`
+}
+
+type assistantResponseMessage struct {
+	Content  string           `json:"content"`
+	ToolUses []toolUsePayload `json:"toolUses,omitempty"`
+}
+
+type userInputMessageContext struct {
+	Tools       []toolSpecification `json:"tools,omitempty"`
+	ToolResults []toolResult        `json:"toolResults,omitempty"`
+}
+
+type toolSpecification struct {
+	ToolSpecification toolSpecificationDetails `json:"toolSpecification"`
+}
+
+type toolSpecificationDetails struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	InputSchema toolInputSchema `json:"inputSchema"`
+}
+
+type toolInputSchema struct {
+	JSON any `json:"json"`
+}
+
+type toolResult struct {
+	ToolUseID string              `json:"toolUseId"`
+	Content   []toolResultContent `json:"content"`
+	Status    string              `json:"status"`
+}
+
+type toolResultContent struct {
+	Text string `json:"text,omitempty"`
+}
+
+type toolUsePayload struct {
+	ToolUseID string         `json:"toolUseId"`
+	Name      string         `json:"name"`
+	Input     map[string]any `json:"input"`
+}
+
+func buildRequestPayload(req provider.ChatRequest, account config.Account, thinkingSettings config.ThinkingSettings) (requestPayload, error) {
 	messages, systemPrompt, err := normalizeRequest(req)
 	if err != nil {
 		return requestPayload{}, err
@@ -31,6 +112,7 @@ func buildRequestPayload(req provider.ChatRequest, account config.Account) (requ
 	}
 
 	injectSystemPrompt(systemPrompt, &historyMessages, &current)
+	injectForcedThinkingFallback(req, thinkingSettings, &current)
 	current.Content = sanitizePromptText(current.Content)
 	if strings.TrimSpace(current.Content) == "" {
 		if len(current.ToolResults) > 0 {
@@ -264,6 +346,7 @@ func normalizeToolSchema(schema any) any {
 
 func injectSystemPrompt(systemPrompt string, history *[]normalizedMessage, current *normalizedMessage) {
 	trimmed := sanitizePromptText(systemPrompt)
+
 	if trimmed == "" {
 		return
 	}
@@ -328,4 +411,40 @@ func buildInferenceConfig(req provider.ChatRequest) *inferenceConfig {
 		return nil
 	}
 	return config
+}
+
+func injectForcedThinkingFallback(req provider.ChatRequest, settings config.ThinkingSettings, current *normalizedMessage) {
+	if current == nil || !shouldInjectForcedThinking(req, settings) {
+		return
+	}
+	current.Content = joinNonEmpty(buildForcedThinkingPrompt(settings.MaxForcedThinkingTokens), current.Content)
+}
+
+func shouldInjectForcedThinking(req provider.ChatRequest, settings config.ThinkingSettings) bool {
+	if req.RouteFamily != string(contract.EndpointAnthropicMessages) {
+		return false
+	}
+	effective := contract.ThinkingConfig{
+		Requested: req.Thinking.Requested,
+		Mode:      thinkingModeFromSettings(settings.Mode),
+	}
+	return thinkingctrl.ForceEligible(effective, settings.ForceForAnthropic)
+}
+
+func thinkingModeFromSettings(mode config.ThinkingMode) contract.ThinkingMode {
+	switch mode {
+	case config.ThinkingModeOff:
+		return contract.ThinkingModeOff
+	case config.ThinkingModeForce:
+		return contract.ThinkingModeForce
+	default:
+		return contract.ThinkingModeAuto
+	}
+}
+
+func buildForcedThinkingPrompt(maxTokens int) string {
+	if maxTokens <= 0 {
+		maxTokens = 4000
+	}
+	return forcedThinkingModeTag + "\n<max_thinking_length>" + fmt.Sprintf("%d", maxTokens) + "</max_thinking_length>"
 }

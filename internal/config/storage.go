@@ -30,9 +30,8 @@ type AppSettings struct {
 	ProxyAPIKey       string              `json:"proxyApiKey,omitempty"`
 	AuthorizationMode bool                `json:"authorizationMode,omitempty"`
 	SchedulingMode    string              `json:"schedulingMode,omitempty"`
-	CircuitBreaker    bool                `json:"circuitBreaker,omitempty"`
-	CircuitSteps      []int               `json:"circuitSteps,omitempty"`
 	Cloudflared       CloudflaredSettings `json:"cloudflared,omitempty"`
+	Thinking          ThinkingSettings    `json:"thinking,omitempty"`
 	ModelAliases      map[string]string   `json:"modelAliases,omitempty"`
 }
 
@@ -58,9 +57,8 @@ func defaultAppSettings() AppSettings {
 		AllowLAN:       false,
 		AutoStartProxy: true,
 		SchedulingMode: string(SchedulingModeBalance),
-		CircuitBreaker: false,
-		CircuitSteps:   defaultCircuitSteps(),
 		Cloudflared:    defaultCloudflaredSettings(),
+		Thinking:       defaultThinkingSettings(),
 	}
 }
 
@@ -125,6 +123,9 @@ func (s *Storage) LoadSettings() (AppSettings, []StartupWarning, error) {
 	if settings.ProxyPort == 0 {
 		settings.ProxyPort = defaultProxyPort
 	}
+	settings.SchedulingMode = string(normalizeSchedulingMode(SchedulingMode(settings.SchedulingMode)))
+	settings.Cloudflared = normalizeCloudflaredSettings(settings.Cloudflared)
+	settings.Thinking = normalizeThinkingSettings(settings.Thinking)
 
 	return settings, nil, nil
 }

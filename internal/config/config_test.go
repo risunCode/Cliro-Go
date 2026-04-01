@@ -10,30 +10,16 @@ func TestNewManager_DefaultsProxyRoutingSettings(t *testing.T) {
 	if manager.SchedulingMode() != SchedulingModeBalance {
 		t.Fatalf("scheduling mode = %q", manager.SchedulingMode())
 	}
-	if manager.CircuitBreaker() {
-		t.Fatalf("expected circuit breaker disabled by default")
-	}
 	cloudflared := manager.Cloudflared()
 	if cloudflared.Mode != CloudflaredModeQuick || !cloudflared.UseHTTP2 || cloudflared.Enabled {
 		t.Fatalf("unexpected cloudflared defaults: %+v", cloudflared)
 	}
-	steps := manager.CircuitSteps()
-	if len(steps) != 3 || steps[0] != 10 || steps[1] != 30 || steps[2] != 60 {
-		t.Fatalf("unexpected circuit steps: %v", steps)
+	thinking := manager.Snapshot().Thinking
+	if thinking.Suffix != defaultThinkingSuffix || thinking.Mode != ThinkingModeAuto || !thinking.RequireAnthropicSignature || thinking.ForceForAnthropic || thinking.MaxForcedThinkingTokens != defaultMaxForcedThinkingTokens {
+		t.Fatalf("unexpected thinking defaults: %+v", thinking)
 	}
-}
-
-func TestSetCircuitSteps_NormalizesInvalidValues(t *testing.T) {
-	manager, err := NewManager(t.TempDir())
-	if err != nil {
-		t.Fatalf("new manager: %v", err)
-	}
-	if err := manager.SetCircuitSteps([]int{0, 7200}); err != nil {
-		t.Fatalf("set circuit steps: %v", err)
-	}
-	steps := manager.CircuitSteps()
-	if len(steps) != 3 || steps[0] != 10 || steps[1] != 3600 || steps[2] != 60 {
-		t.Fatalf("unexpected normalized circuit steps: %v", steps)
+	if len(thinking.FallbackTags) != 2 || thinking.FallbackTags[0] != "<thinking>" || thinking.FallbackTags[1] != "<think>" {
+		t.Fatalf("unexpected fallback tag defaults: %+v", thinking.FallbackTags)
 	}
 }
 

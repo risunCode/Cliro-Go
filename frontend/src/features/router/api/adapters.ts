@@ -1,8 +1,8 @@
-import { asBoolean, asNumber, asNumberArray, asRecord, asString } from '@/shared/api/wails/adapters'
+import { asBoolean, asNumber, asRecord, asString } from '@/shared/api/wails/adapters'
 import type { CliSyncAppID, CliSyncFile, CliSyncResult, CliSyncStatus, LocalModelCatalogItem, ProxyStatus } from '@/features/router/types'
 
 const toCliSyncAppID = (value: string): CliSyncAppID | null => {
-  if (value === 'claude-code' || value === 'opencode-cli' || value === 'codex-ai') {
+  if (value === 'claude-code' || value === 'opencode-cli' || value === 'kilo-cli' || value === 'codex-ai') {
     return value
   }
   return null
@@ -31,8 +31,6 @@ export const toProxyStatus = (payload: unknown): ProxyStatus => {
     proxyApiKey: asString(record.proxyApiKey),
     authorizationMode: asBoolean(record.authorizationMode),
     schedulingMode: asString(record.schedulingMode) || 'balance',
-    circuitBreaker: asBoolean(record.circuitBreaker),
-    circuitSteps: asNumberArray(record.circuitSteps).length > 0 ? asNumberArray(record.circuitSteps) : [10, 30, 60],
     cloudflared: {
       enabled: asBoolean(cloudflared.enabled),
       mode: cloudflaredMode,

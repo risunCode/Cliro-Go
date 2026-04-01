@@ -126,14 +126,6 @@ export function SetAutoStartProxy(arg1) {
   return window['go']['main']['App']['SetAutoStartProxy'](arg1);
 }
 
-export function SetCircuitBreaker(arg1) {
-  return window['go']['main']['App']['SetCircuitBreaker'](arg1);
-}
-
-export function SetCircuitSteps(arg1) {
-  return window['go']['main']['App']['SetCircuitSteps'](arg1);
-}
-
 export function SetCloudflaredConfig(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetCloudflaredConfig'](arg1, arg2, arg3);
 }
@@ -180,6 +172,14 @@ export function StopCloudflared() {
 
 export function StopProxy() {
   return window['go']['main']['App']['StopProxy']();
+}
+
+export function SubmitCodexAuthCode(arg1, arg2) {
+  return window['go']['main']['App']['SubmitCodexAuthCode'](arg1, arg2);
+}
+
+export function SubmitKiroAuthCode(arg1, arg2) {
+  return window['go']['main']['App']['SubmitKiroAuthCode'](arg1, arg2);
 }
 
 export function SyncCLIConfig(arg1, arg2) {

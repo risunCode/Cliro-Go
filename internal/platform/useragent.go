@@ -5,7 +5,7 @@ import (
 	"runtime"
 )
 
-const OpencodeVersion = "1.2.27"
+const opencodeVersion = "1.2.27"
 
 // BuildOpencodeUserAgent mocks opencode user-agent format
 // Format: opencode/{version} ({os} {osVersion}; {arch})
@@ -18,7 +18,7 @@ func BuildOpencodeUserAgent() string {
 	osVersion := getOSVersion()
 	if osVersion != "" {
 		return fmt.Sprintf("opencode/%s (%s %s; %s)",
-			OpencodeVersion,
+			opencodeVersion,
 			runtime.GOOS,
 			osVersion,
 			runtime.GOARCH)
@@ -26,7 +26,7 @@ func BuildOpencodeUserAgent() string {
 
 	// Fallback if version detection fails
 	return fmt.Sprintf("opencode/%s (%s; %s)",
-		OpencodeVersion,
+		opencodeVersion,
 		runtime.GOOS,
 		runtime.GOARCH)
 }

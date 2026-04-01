@@ -1,68 +1,30 @@
 <script lang="ts">
   import { Database, FolderOpen, Upload } from 'lucide-svelte'
+  import type { SettingsActions } from '@/app/services/app-controller'
+  import { validateBackupPayload } from '@/app/lib/backup'
   import Button from '@/components/common/Button.svelte'
   import SurfaceCard from '@/components/common/SurfaceCard.svelte'
-  import type { AppState } from '@/app/types'
-  import type { Account } from '@/features/accounts/types'
+  import { createAsyncTaskState, runAsyncTask, type AsyncTaskState } from '@/shared/lib/async'
 
-  interface BackupPayload {
-    version: number
-    exportedAt: string
-    state: AppState | null
-    accounts: Account[]
-  }
-
-  interface RestoreProgress {
-    step: string
-    index: number
-    total: number
-  }
-
-  export let onOpenDataDir: () => Promise<void>
-  export let onExportBackup: () => Promise<void>
-  export let onRestoreBackup: (payload: BackupPayload, onProgress?: (progress: RestoreProgress) => void) => Promise<void>
+  export let settingsActions: SettingsActions
 
   let backupFileInput: HTMLInputElement | null = null
-  let busy = false
+  let task: AsyncTaskState = createAsyncTaskState()
   let statusMessage = ''
-  let errorMessage = ''
+  $: busy = task.busy
+  $: errorMessage = task.error
 
   const setBusy = async (action: () => Promise<void>, successMessage = 'Settings saved successfully.'): Promise<void> => {
-    busy = true
-    errorMessage = ''
     statusMessage = ''
+
     try {
-      await action()
+      await runAsyncTask((nextState) => {
+        task = nextState
+      }, action)
       statusMessage = successMessage
-    } catch (error) {
-      errorMessage = error instanceof Error ? error.message : 'Operation failed.'
-    } finally {
-      busy = false
+    } catch {
+      statusMessage = ''
     }
-  }
-
-  const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return typeof value === 'object' && value !== null
-  }
-
-  const validateBackupPayload = (value: unknown): BackupPayload => {
-    if (!isRecord(value)) throw new Error('Backup payload must be a JSON object.')
-
-    const version = Number(value.version)
-    if (!Number.isFinite(version) || version <= 0) throw new Error('Backup payload version is invalid.')
-
-    const rawState = value.state
-    const state = rawState === null || rawState === undefined ? null : (isRecord(rawState) ? (rawState as unknown as AppState) : null)
-    if (rawState !== null && rawState !== undefined && !isRecord(rawState)) {
-      throw new Error('Backup payload state must be an object or null.')
-    }
-
-    if (!Array.isArray(value.accounts)) throw new Error('Backup payload accounts must be an array.')
-
-    const accounts = value.accounts.filter((entry) => isRecord(entry)) as unknown as Account[]
-    const exportedAt = typeof value.exportedAt === 'string' ? value.exportedAt : new Date().toISOString()
-
-    return { version, exportedAt, state, accounts }
   }
 
   const handleRestoreFromFile = async (event: Event): Promise<void> => {
@@ -76,7 +38,7 @@
         const parsedPayload = JSON.parse(text) as unknown
         const payload = validateBackupPayload(parsedPayload)
 
-        await onRestoreBackup(payload, (progress) => {
+        await settingsActions.restoreBackup(payload, (progress) => {
           statusMessage = `Restoring step ${progress.index}/${progress.total}: ${progress.step}`
         })
       },
@@ -88,7 +50,7 @@
 
   const handleExportBackup = async (): Promise<void> => {
     await setBusy(async () => {
-      await onExportBackup()
+      await settingsActions.exportBackup()
     }, 'Backup exported successfully.')
   }
 
@@ -104,7 +66,7 @@
           <Database size={15} class="text-text-secondary" />
           <p class="text-sm font-semibold text-text-primary">Data Folder</p>
         </div>
-        <Button variant="secondary" size="sm" on:click={() => void onOpenDataDir()} disabled={busy}>
+        <Button variant="secondary" size="sm" on:click={() => void settingsActions.openDataDir()} disabled={busy}>
           <FolderOpen size={13} class="mr-1" />
           Open
         </Button>

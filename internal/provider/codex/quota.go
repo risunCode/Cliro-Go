@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"cliro-go/internal/util"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"cliro-go/internal/config"
+	provider "cliro-go/internal/provider"
 
 	"github.com/google/uuid"
 )
@@ -19,10 +21,6 @@ const (
 	codexQuotaBaseURL = "https://chatgpt.com/backend-api/codex"
 	chatGPTBaseURL    = "https://chatgpt.com/backend-api"
 )
-
-type QuotaRefresher interface {
-	RefreshQuota(accountID string) error
-}
 
 type QuotaFetcher struct {
 	httpClient *http.Client
@@ -56,7 +54,7 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account) (
 			return quota, nil
 		}
 		if blockedMsg, blocked := blockedAccountMessageFromError(err); blocked {
-			quota := synthesizeQuota(account, fmt.Errorf("%s", blockedMsg))
+			quota := provider.SynthesizeQuota(account, fmt.Errorf("%s", blockedMsg))
 			quota.Status = "deactivated"
 			quota.Summary = blockedMsg
 			quota.Error = blockedMsg
@@ -69,10 +67,10 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account) (
 	}
 
 	if softFailuresOnly {
-		return synthesizeQuota(account, nil), nil
+		return provider.SynthesizeQuota(account, nil), nil
 	}
 
-	quota := synthesizeQuota(account, lastErr)
+	quota := provider.SynthesizeQuota(account, lastErr)
 	return quota, lastErr
 }
 
@@ -103,10 +101,10 @@ func (f *QuotaFetcher) tryQuotaEndpoint(ctx context.Context, account config.Acco
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return config.QuotaInfo{}, fmt.Errorf("quota request failed (%d): %s", resp.StatusCode, compactHTTPBody(body))
+		return config.QuotaInfo{}, fmt.Errorf("quota request failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(body))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return config.QuotaInfo{}, fmt.Errorf("quota request failed (%d): %s", resp.StatusCode, compactHTTPBody(body))
+		return config.QuotaInfo{}, fmt.Errorf("quota request failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(body))
 	}
 	if bytesContainChallenge(body) {
 		return config.QuotaInfo{}, fmt.Errorf("quota endpoint blocked by challenge")
@@ -163,7 +161,7 @@ func parseQuotaPayload(body []byte, source string) (config.QuotaInfo, error) {
 			}
 		}
 		if bucket.Status == "" {
-			bucket.Status = bucketStatus(bucket)
+			bucket.Status = provider.BucketStatus(bucket)
 		}
 		out = append(out, bucket)
 	}
@@ -173,7 +171,7 @@ func parseQuotaPayload(body []byte, source string) (config.QuotaInfo, error) {
 	return config.QuotaInfo{
 		Status:        status,
 		Summary:       fmt.Sprintf("%d quota bucket(s) detected", len(out)),
-		Source: source,
+		Source:        source,
 		LastCheckedAt: time.Now().Unix(),
 		Buckets:       out,
 	}, nil
@@ -203,7 +201,7 @@ func parseCodexUsagePayload(root map[string]any, source string) (config.QuotaInf
 			Percent:   maxInt(0, 100-usedPercent),
 			ResetAt:   extractTime(primaryRaw, "reset_at", "resets_at", "next_reset_at"),
 		}
-		bucket.Status = bucketStatus(bucket)
+		bucket.Status = provider.BucketStatus(bucket)
 		buckets = append(buckets, bucket)
 	}
 
@@ -214,13 +212,13 @@ func parseCodexUsagePayload(root map[string]any, source string) (config.QuotaInf
 		}
 		bucket := config.QuotaBucket{
 			Name:      "weekly",
-			Used:    usedPercent,
+			Used:      usedPercent,
 			Total:     100,
 			Remaining: maxInt(0, 100-usedPercent),
 			Percent:   maxInt(0, 100-usedPercent),
 			ResetAt:   extractTime(secondaryRaw, "reset_at", "resets_at", "next_reset_at"),
 		}
-		bucket.Status = bucketStatus(bucket)
+		bucket.Status = provider.BucketStatus(bucket)
 		buckets = append(buckets, bucket)
 	}
 
@@ -235,7 +233,7 @@ func parseCodexUsagePayload(root map[string]any, source string) (config.QuotaInf
 
 	return config.QuotaInfo{
 		Status:        aggregateQuotaStatus(buckets),
-		Summary:   summary,
+		Summary:       summary,
 		Source:        source,
 		LastCheckedAt: time.Now().Unix(),
 		Buckets:       buckets,
@@ -281,8 +279,8 @@ func quotaBucketFromMap(name string, raw map[string]any) (config.QuotaBucket, bo
 	used := extractInt(raw, "used", "consumed", "current")
 	percent := extractInt(raw, "percent", "percentage")
 	resetAt := extractTime(raw, "reset_at", "resets_at", "next_reset_at")
-	status := strings.ToLower(firstNonEmpty(extractString(raw, "status"), extractString(raw, "state")))
-	bucketName := firstNonEmpty(name, extractString(raw, "name"), extractString(raw, "bucket"), extractString(raw, "kind"))
+	status := strings.ToLower(util.FirstNonEmpty(extractString(raw, "status"), extractString(raw, "state")))
+	bucketName := util.FirstNonEmpty(name, extractString(raw, "name"), extractString(raw, "bucket"), extractString(raw, "kind"))
 	if bucketName == "" {
 		bucketName = "quota"
 	}
@@ -296,54 +294,8 @@ func quotaBucketFromMap(name string, raw map[string]any) (config.QuotaBucket, bo
 		Remaining: remaining,
 		Percent:   percent,
 		ResetAt:   resetAt,
-		Status:    normalizeQuotaStatus(status),
+		Status:    provider.NormalizeQuotaStatus(status),
 	}, true
-}
-
-func synthesizeQuota(account config.Account, err error) config.QuotaInfo {
-	now := time.Now().Unix()
-	info := config.QuotaInfo{
-		Status:        "healthy",
-		Summary:       "Quota endpoint not resolved yet; using local runtime state.",
-		Source:   "runtime",
-		LastCheckedAt: now,
-	}
-	if err != nil {
-		info.Error = err.Error()
-		info.Status = "unknown"
-	}
-	if account.CooldownUntil > now {
-		info.Status = "exhausted"
-		info.Summary = firstNonEmpty(account.LastError, "Quota cooldown is active.")
-		info.Buckets = []config.QuotaBucket{{
-			Name:    "session",
-			ResetAt: account.CooldownUntil,
-			Status:  "exhausted",
-		}, {
-			Name:   "weekly",
-			Status: "unknown",
-		}}
-		return info
-	}
-	if account.LastError != "" {
-		info.Status = "degraded"
-		info.Summary = account.LastError
-	}
-	if len(account.Quota.Buckets) > 0 {
-		info.Buckets = append([]config.QuotaBucket(nil), account.Quota.Buckets...)
-	}
-	return info
-}
-
-func compactHTTPBody(body []byte) string {
-	trimmed := strings.TrimSpace(string(body))
-	if trimmed == "" {
-		return "empty response"
-	}
-	if len(trimmed) > 180 {
-		return trimmed[:180] + "..."
-	}
-	return trimmed
 }
 
 func isSoftQuotaDiscoveryErr(err error) bool {
@@ -431,54 +383,6 @@ func extractTime(raw map[string]any, keys ...string) int64 {
 		}
 	}
 	return 0
-}
-
-func normalizeQuotaStatus(status string) string {
-	status = strings.ToLower(strings.TrimSpace(status))
-	switch status {
-	case "ready", "healthy", "ok":
-		return "healthy"
-	case "expiring", "warning":
-		return "low"
-	case "expired", "exhausted", "quota_exceeded", "insufficient_quota":
-		return "exhausted"
-	case "", "unknown":
-		return ""
-	default:
-		return status
-	}
-}
-
-func bucketStatus(bucket config.QuotaBucket) string {
-	if bucket.Status != "" {
-		status := normalizeQuotaStatus(bucket.Status)
-		if status != "" {
-			return status
-		}
-		return strings.ToLower(strings.TrimSpace(bucket.Status))
-	}
-	now := time.Now().Unix()
-	if bucket.Total > 0 {
-		remaining := bucket.Remaining
-		if remaining == 0 && bucket.Used > 0 && bucket.Used <= bucket.Total {
-			remaining = maxInt(bucket.Total-bucket.Used, 0)
-		}
-		if remaining <= 0 {
-			return "exhausted"
-		}
-		remainingPercent := int(float64(remaining) / float64(bucket.Total) * 100)
-		if remainingPercent <= 15 {
-			return "low"
-		}
-		return "healthy"
-	}
-	if bucket.ResetAt > now {
-		if bucket.Remaining <= 0 {
-			return "exhausted"
-		}
-		return "low"
-	}
-	return "unknown"
 }
 
 func blockedAccountMessageFromError(err error) (string, bool) {

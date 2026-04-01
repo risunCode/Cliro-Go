@@ -2,8 +2,8 @@ package platform
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -38,29 +38,16 @@ func RequestIDFromContext(ctx context.Context) string {
 	return strings.TrimSpace(value)
 }
 
-func JoinProxyBaseURL(baseURL string, endpointPath string) string {
-	trimmedBase := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	trimmedPath := strings.TrimSpace(endpointPath)
-	if trimmedPath == "" {
-		return trimmedBase
-	}
-	if !strings.HasPrefix(trimmedPath, "/") {
-		trimmedPath = "/" + trimmedPath
-	}
-	if strings.HasSuffix(strings.ToLower(trimmedBase), "/v1") && strings.HasPrefix(strings.ToLower(trimmedPath), "/v1") {
-		trimmedBase = trimmedBase[:len(trimmedBase)-3]
-	}
-	return trimmedBase + trimmedPath
+func ApplyCommonProxyHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key, X-Request-ID, Anthropic-Version")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Type, X-Request-ID")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 }
 
-var ErrNotImplemented = errors.New("not implemented")
-
-func InvalidRequest(message string) error {
-	return fmt.Errorf("invalid request: %s", message)
-}
-
-type Logger interface {
-	Info(module, message string)
-	Error(module, message string)
-	Debug(module, message string)
+func EnsureProtocolRegistered() (bool, error) {
+	return ensureProtocolRegistered()
 }

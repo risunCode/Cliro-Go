@@ -11,13 +11,6 @@ export type AppState = main.State & {
 
 export type LogEntry = logger.Entry
 
-export interface ClearLogsResult {
-  memoryCleared: boolean
-  fileCleared: boolean
-  pendingRetry: boolean
-  error: string
-}
-
 export interface UpdateInfo {
   currentVersion: string
   latestVersion: string

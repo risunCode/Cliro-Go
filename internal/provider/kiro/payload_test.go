@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"cliro-go/internal/config"
+	contract "cliro-go/internal/contract"
 	provider "cliro-go/internal/provider"
 )
 
@@ -16,7 +17,7 @@ func TestBuildRequestPayload_StripsToolContentWhenToolsMissing(t *testing.T) {
 			{Role: "assistant", ToolCalls: []provider.ToolCall{{ID: "tool_1", Type: "function", Function: provider.ToolCallTarget{Name: "Read", Arguments: `{"path":"README.md"}`}}}},
 			{Role: "tool", ToolCallID: "tool_1", Content: "done"},
 		},
-	}, config.Account{})
+	}, config.Account{}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -43,7 +44,7 @@ func TestBuildRequestPayload_ConvertsOrphanToolResultsToText(t *testing.T) {
 			Role:    "user",
 			Content: []any{map[string]any{"type": "tool_result", "tool_use_id": "tool_1", "content": "done"}},
 		}},
-	}, config.Account{})
+	}, config.Account{}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestBuildRequestPayload_EnsuresUserFirstAlternationAndSystemInjection(t *te
 			{Role: "developer", Content: "one"},
 			{Role: "user", Content: "two"},
 		},
-	}, config.Account{})
+	}, config.Account{}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -93,11 +94,38 @@ func TestBuildRequestPayload_EnsuresUserFirstAlternationAndSystemInjection(t *te
 	}
 }
 
+func TestBuildRequestPayload_InsertsEmptyAssistantPlaceholderBetweenAdjacentUsers(t *testing.T) {
+	payload, err := buildRequestPayload(provider.ChatRequest{
+		Model: "claude-sonnet-4.5",
+		Messages: []provider.Message{
+			{Role: "assistant", Content: "hello"},
+			{Role: "developer", Content: "one"},
+			{Role: "user", Content: "three"},
+		},
+	}, config.Account{}, config.ThinkingSettings{})
+	if err != nil {
+		t.Fatalf("buildRequestPayload: %v", err)
+	}
+	history := payload.ConversationState.History
+	if len(history) != 4 {
+		t.Fatalf("expected normalized history entries, got %#v", history)
+	}
+	if history[1].AssistantResponseMessage == nil || history[1].AssistantResponseMessage.Content != "hello" {
+		t.Fatalf("expected preserved assistant message, got %#v", history[1])
+	}
+	if history[3].AssistantResponseMessage == nil || history[3].AssistantResponseMessage.Content != "(empty)" {
+		t.Fatalf("expected synthetic assistant placeholder, got %#v", history[3])
+	}
+	if payload.ConversationState.CurrentMessage.UserInputMessage.Content != "three" {
+		t.Fatalf("unexpected current content: %#v", payload.ConversationState.CurrentMessage.UserInputMessage.Content)
+	}
+}
+
 func TestBuildRequestPayload_StripsEnvironmentDetailsFromCurrentUserInput(t *testing.T) {
 	payload, err := buildRequestPayload(provider.ChatRequest{
 		Model:    "claude-sonnet-4.5",
 		Messages: []provider.Message{{Role: "user", Content: "<environment_details>\nCurrent time: 2026-03-30T20:43:49+07:00\n</environment_details>\nhello"}},
-	}, config.Account{})
+	}, config.Account{}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -111,7 +139,7 @@ func TestBuildRequestPayload_OnlyIncludesProfileARNForDesktopStyleAccounts(t *te
 		Model:    "claude-sonnet-4.5",
 		Messages: []provider.Message{{Role: "user", Content: "hello"}},
 		Metadata: map[string]any{"profileArn": "arn:aws:codewhisperer:us-east-1:123:profile/XYZ", "conversationId": "conv-1", "continuationId": "cont-1"},
-	}, config.Account{AccountID: "arn:aws:codewhisperer:us-east-1:123:profile/ABC"})
+	}, config.Account{AccountID: "arn:aws:codewhisperer:us-east-1:123:profile/ABC"}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -129,7 +157,7 @@ func TestBuildRequestPayload_OnlyIncludesProfileARNForDesktopStyleAccounts(t *te
 		Model:    "claude-sonnet-4.5",
 		Messages: []provider.Message{{Role: "user", Content: "hello"}},
 		Metadata: map[string]any{"profileArn": "arn:aws:codewhisperer:us-east-1:123:profile/XYZ"},
-	}, config.Account{AccountID: "arn:aws:codewhisperer:us-east-1:123:profile/ABC", ClientID: "client", ClientSecret: "secret"})
+	}, config.Account{AccountID: "arn:aws:codewhisperer:us-east-1:123:profile/ABC", ClientID: "client", ClientSecret: "secret"}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -147,7 +175,7 @@ func TestBuildRequestPayload_ToolOnlyAssistantAndToolResultsUseKiroSafePlacehold
 			{Role: "assistant", ToolCalls: []provider.ToolCall{{ID: "tool_1", Type: "function", Function: provider.ToolCallTarget{Name: "Read", Arguments: `{"path":"README.md"}`}}}},
 			{Role: "tool", ToolCallID: "tool_1", Content: "readme content"},
 		},
-	}, config.Account{})
+	}, config.Account{}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -207,7 +235,7 @@ func TestBuildRequestPayload_SplitsParallelToolRoundTripsIntoAlternatingHistory(
 		t.Fatalf("expected second split tool result, got %#v", normalized[4])
 	}
 
-	payload, err := buildRequestPayload(request, config.Account{})
+	payload, err := buildRequestPayload(request, config.Account{}, config.ThinkingSettings{})
 	if err != nil {
 		t.Fatalf("buildRequestPayload: %v", err)
 	}
@@ -224,5 +252,54 @@ func TestBuildRequestPayload_SplitsParallelToolRoundTripsIntoAlternatingHistory(
 	current := payload.ConversationState.CurrentMessage.UserInputMessage
 	if current.UserInputMessageContext == nil || len(current.UserInputMessageContext.ToolResults) != 1 || current.UserInputMessageContext.ToolResults[0].ToolUseID != "tool_2" {
 		t.Fatalf("expected current tool result to contain last tool round-trip, got %#v", current.UserInputMessageContext)
+	}
+}
+
+func TestBuildRequestPayload_ForcedThinkingInjectionModes(t *testing.T) {
+	tests := []struct {
+		name       string
+		mode       config.ThinkingMode
+		wantInject bool
+	}{
+		{name: "off", mode: config.ThinkingModeOff},
+		{name: "auto", mode: config.ThinkingModeAuto, wantInject: true},
+		{name: "force", mode: config.ThinkingModeForce, wantInject: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, err := buildRequestPayload(provider.ChatRequest{
+				RouteFamily: string(contract.EndpointAnthropicMessages),
+				Model:       "claude-sonnet-4.5",
+				Thinking:    contract.ThinkingConfig{Requested: true},
+				Messages:    []provider.Message{{Role: "user", Content: "hello"}},
+			}, config.Account{}, config.ThinkingSettings{Mode: tt.mode, ForceForAnthropic: true, MaxForcedThinkingTokens: 2048})
+			if err != nil {
+				t.Fatalf("buildRequestPayload: %v", err)
+			}
+			content := payload.ConversationState.CurrentMessage.UserInputMessage.Content
+			if got := strings.Contains(content, forcedThinkingModeTag); got != tt.wantInject {
+				t.Fatalf("thinking injection present = %v, want %v; content=%q", got, tt.wantInject, content)
+			}
+			if tt.wantInject && !strings.Contains(content, "<max_thinking_length>2048</max_thinking_length>") {
+				t.Fatalf("expected configured max thinking length tag, got %q", content)
+			}
+		})
+	}
+}
+
+func TestBuildRequestPayload_ForcedThinkingInjectionStaysOffForNonThinkingTraffic(t *testing.T) {
+	payload, err := buildRequestPayload(provider.ChatRequest{
+		RouteFamily: string(contract.EndpointAnthropicMessages),
+		Model:       "claude-sonnet-4.5",
+		Thinking:    contract.ThinkingConfig{},
+		Messages:    []provider.Message{{Role: "user", Content: "hello"}},
+	}, config.Account{}, config.ThinkingSettings{Mode: config.ThinkingModeForce, ForceForAnthropic: true, MaxForcedThinkingTokens: 2048})
+	if err != nil {
+		t.Fatalf("buildRequestPayload: %v", err)
+	}
+	content := payload.ConversationState.CurrentMessage.UserInputMessage.Content
+	if strings.Contains(content, forcedThinkingModeTag) {
+		t.Fatalf("expected no thinking injection for non-thinking request, got %q", content)
 	}
 }

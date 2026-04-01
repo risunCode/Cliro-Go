@@ -32,9 +32,10 @@ type CompletionsResponse struct {
 }
 
 type CompletionsChoice struct {
-	Index        int    `json:"index"`
-	Text         string `json:"text"`
-	FinishReason string `json:"finish_reason"`
+	Index            int    `json:"index"`
+	Text             string `json:"text"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	FinishReason     string `json:"finish_reason"`
 }
 
 type Usage struct {
@@ -66,9 +67,10 @@ type ResponsesOutputItem struct {
 }
 
 type ResponsesContentPart struct {
-	Type        string `json:"type"`
-	Text        string `json:"text,omitempty"`
-	Annotations []any  `json:"annotations,omitempty"`
+	Type             string `json:"type"`
+	Text             string `json:"text,omitempty"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Annotations      []any  `json:"annotations,omitempty"`
 }
 
 type ResponsesUsage struct {

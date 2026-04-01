@@ -173,7 +173,7 @@
 
       <div class="grid gap-2 sm:grid-cols-2">
         <div class="rounded-sm border border-border bg-app p-2.5">
-          <p class="text-xs text-text-secondary">Prompt Tokens (Input)</p>
+          <p class="text-xs text-text-secondary">Prompt Tokens (Input+Cache)</p>
           <p class="mt-0.5 text-lg font-semibold text-text-primary">{formatNumber(promptTokens)}</p>
         </div>
         <div class="rounded-sm border border-border bg-app p-2.5">

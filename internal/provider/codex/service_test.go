@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"cliro-go/internal/adapter/decode"
 	"cliro-go/internal/protocol/anthropic"
 	provider "cliro-go/internal/provider"
 )
@@ -63,7 +62,7 @@ func TestBuildRequestPayload_IncludesDefaultMarkdownInstructions(t *testing.T) {
 
 func TestBuildRequestPayload_FromAnthropicFlowDoesNotEmitAssistantInputText(t *testing.T) {
 	service := &Service{}
-	irRequest, err := decode.AnthropicMessagesToIR(anthropic.MessagesRequest{
+	irRequest, err := anthropic.MessagesToIR(anthropic.MessagesRequest{
 		Model:     "gpt-5.4",
 		MaxTokens: 256,
 		Messages: []anthropic.Message{
@@ -73,9 +72,9 @@ func TestBuildRequestPayload_FromAnthropicFlowDoesNotEmitAssistantInputText(t *t
 		},
 	})
 	if err != nil {
-		t.Fatalf("AnthropicMessagesToIR: %v", err)
+		t.Fatalf("MessagesToIR: %v", err)
 	}
-	payload, err := service.buildRequestPayload(RequestFromIR(irRequest))
+	payload, err := service.buildRequestPayload(provider.RequestFromIR(irRequest))
 	if err != nil {
 		t.Fatalf("build request payload: %v", err)
 	}

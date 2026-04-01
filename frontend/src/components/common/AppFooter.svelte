@@ -1,32 +1,38 @@
 <script lang="ts">
   import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import type { AppState } from '@/app/types'
   import type { ProxyStatus } from '@/features/router/types'
 
   const repoURL = 'https://github.com/risunCode/Cliro-Go'
   export let proxyStatus: ProxyStatus | null = null
+  export let state: AppState | null = null
+  export let loading = false
 
   const openURL = (event: MouseEvent, url: string): void => {
     event.preventDefault()
     BrowserOpenURL(url)
   }
 
-  $: proxyRunning = proxyStatus?.running ?? false
-  $: serviceAddress = proxyStatus?.bindAddress || `${proxyStatus?.allowLan ? '0.0.0.0' : '127.0.0.1'}:${proxyStatus?.port ?? 8095}`
-  $: proxyBaseURL = proxyStatus?.url || 'http://127.0.0.1:8095/v1'
+  $: proxyReady = proxyStatus !== null || state !== null
+  $: proxyRunning = proxyStatus?.running ?? state?.proxyRunning ?? false
+  $: proxyBaseURL = proxyStatus?.url || state?.proxyUrl || ''
+  $: endpointLabel = proxyBaseURL.replace(/^https?:\/\//, '')
+  $: cloudflaredKnown = proxyStatus !== null
+  $: cloudflaredRunning = proxyStatus?.cloudflared.running ?? false
 </script>
 
 <footer class="rounded-t-base border border-border bg-surface px-4 py-3 text-xs text-text-secondary shadow-soft md:px-6">
   <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4">
     <div class="flex flex-wrap items-center gap-2">
-      <span class={`service-pill ${proxyRunning ? 'service-pill-online' : 'service-pill-offline'}`}>
-        {proxyRunning ? 'Online' : 'Offline'}
+      <span class={`service-pill ${!proxyReady && loading ? 'service-pill-loading' : proxyRunning ? 'service-pill-online' : 'service-pill-offline'}`}>
+        Proxy {!proxyReady && loading ? 'Loading' : proxyRunning ? 'Online' : 'Offline'}
       </span>
-      {#if proxyRunning}
-        <code class="rounded-sm border border-border bg-app px-2 py-0.5 text-[11px] text-text-primary">{serviceAddress}</code>
-        <code class="rounded-sm border border-border bg-app px-2 py-0.5 text-[11px] text-text-primary">{proxyBaseURL}</code>
-      {:else}
-        <span class="text-text-secondary">Proxy service is stopped.</span>
+      {#if proxyRunning && endpointLabel}
+        <code class="rounded-sm border border-border bg-app px-2 py-0.5 text-[11px] text-text-primary">{endpointLabel}</code>
       {/if}
+      <span class={`service-pill ${!cloudflaredKnown && loading ? 'service-pill-loading' : cloudflaredRunning ? 'service-pill-online' : 'service-pill-offline'}`}>
+        Cloudflared {!cloudflaredKnown && loading ? 'Loading' : cloudflaredRunning ? 'Online' : 'Offline'}
+      </span>
     </div>
 
     <a
@@ -57,6 +63,12 @@
     color: var(--color-success);
     border-color: color-mix(in srgb, var(--color-success) 46%, var(--color-border));
     background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  }
+
+  .service-pill-loading {
+    color: var(--color-info);
+    border-color: color-mix(in srgb, var(--color-info) 46%, var(--color-border));
+    background: color-mix(in srgb, var(--color-info) 14%, transparent);
   }
 
   .service-pill-offline {

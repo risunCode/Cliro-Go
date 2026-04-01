@@ -1,976 +1,364 @@
-# AGENTS.md - Guide for AI Agents Working in CLIro-Go
+# AGENTS.md - CLIro-Go Agent Guide
 
-This document provides essential information for AI agents working in the CLIro-Go codebase.
+This guide gives AI coding agents the current project scope, architecture, and workflows for CLIro-Go.
 
 ## Project Overview
 
-**CLIro-Go** is a desktop application built with Wails (Go + Svelte) that provides an OpenAI-compatible local proxy for multiple upstream providers. It currently routes requests to ChatGPT Codex and Kiro (Amazon Q/Kiro runtime), manages account authentication, tracks quota and health state, exposes local OpenAI-compatible plus Anthropic-compatible endpoints, and can publish the proxy through Cloudflared.
+**CLIro-Go** is a Wails desktop control plane for a local OpenAI-compatible + Anthropic-compatible proxy.
 
-- **Language**: Go 1.23+ (backend), TypeScript + Svelte 3 (frontend)
-- **Framework**: Wails v2.11.0, Vite, Tailwind CSS
-- **Current Release**: v0.2.0
-- **License**: Not specified
-- **Main Entry Point**: [main.go](main.go)
-- **Data Directory**: `~/.cliro-go/` with multiple JSON files:
-  - `config.json` - Application settings (proxy port, LAN access, auto-start)
-  - `accounts.json` - All Codex and Kiro account data
-  - `stats.json` - Proxy usage statistics
-  - `app.log` - Persistent application log file
-  - `bin/cloudflared(.exe)` - Downloaded Cloudflared binary for public access
+- **Backend**: Go 1.23+
+- **Frontend**: Svelte + TypeScript + Vite
+- **Desktop shell**: Wails v2.11+
+- **Current release**: **v0.3.0**
+- **Main entry point**: `main.go`
+- **Wails app bridge**: `app.go`
 
-## Current Behavior Snapshot
+CLIro-Go currently focuses on:
 
-- Only **Kiro** models publish `-thinking` aliases in `GET /v1/models`. Codex models stay unsuffixed.
-- Kiro runtime endpoints are fixed to `q.us-east-1.amazonaws.com` and `codewhisperer.us-east-1.amazonaws.com`; do not make them region-aware unless upstream behavior is re-verified.
-- Authorization mode requires the configured API key for **all** proxy routes when enabled.
-- Smart `RefreshAllQuotas()` skips disabled, banned, and not-yet-reset exhausted accounts. `ForceRefreshAllQuotas()` bypasses that skip logic.
-- API Router now owns proxy runtime controls, scheduling policy, endpoint testing, and Cloudflared public access.
+- Multi-account routing across **Codex** and **Kiro** providers.
+- OAuth/device/social auth flows and token lifecycle handling.
+- Quota-aware account health + cooldown + scheduling.
+- API Router controls (proxy runtime, model aliasing, Cloudflared, endpoint tester, one-click CLI config sync).
+- Local desktop-first UX with persisted JSON state in `~/.cliro-go/`.
+
+## Current Scope Snapshot
+
+- `GET /v1/models` exposes canonical model IDs only (no published `-thinking` aliases).
+- Requests with `-thinking` suffix are still normalized during model resolution for compatibility.
+- Kiro runtime endpoints remain fixed to `q.us-east-1.amazonaws.com` and `codewhisperer.us-east-1.amazonaws.com`.
+- Authorization mode (when enabled) requires the configured proxy API key on all proxy routes.
+- Smart quota refresh skips accounts that are disabled/banned/not-yet-reset exhausted; force refresh bypasses smart skip.
+- One-click CLI config sync targets in API Router:
+  - `claude-code`
+  - `opencode-cli`
+  - `kilo-cli`
+  - `codex-ai`
+
+## Data Directory
+
+CLIro-Go persists runtime data under `~/.cliro-go/`:
+
+- `config.json` - proxy, scheduling, cloudflared, model aliases, etc.
+- `accounts.json` - account and token/quota state.
+- `stats.json` - proxy usage counters.
+- `app.log` - persistent app log.
+- `bin/cloudflared(.exe)` - local Cloudflared binary.
 
 ## Essential Commands
 
 ### Development
 
 ```bash
-# Install frontend dependencies
 cd frontend && npm install && cd ..
-
-# Run dev mode (hot reload for both Go and frontend)
 wails dev
-
-# Type check frontend
-cd frontend && npm run check
 ```
 
-### Building
+### Validation
 
 ```bash
-# Production build (creates executable in build/bin/)
-wails build
-
-# Frontend only
-cd frontend && npm run build
-```
-
-### Testing
-
-```bash
-# Go packages used by active app code
+cd frontend && npm run check && cd ..
 go test . ./internal/...
-
-# Test proxy health
-curl http://localhost:8095/health
-
-# Test chat completions
-curl -X POST http://localhost:8095/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-5.2-codex","messages":[{"role":"user","content":"Hello"}]}'
 ```
+
+### Production Build
+
+```bash
+wails build
+```
+
+Output (Windows): `build/bin/Cliro-Go.exe`
 
 ## Architecture
 
-### Wails Bridge Pattern
+### Wails Bridge
 
-**Go Backend** exposes methods to frontend via Wails bindings:
-- [app.go](app.go) - Main `App` struct with methods like `GetState()`, `StartProxy()`, `StartCodexAuth()`
-- [main.go](main.go) - Binds `App` to Wails runtime
-- Auto-generates TypeScript bindings in `frontend/wailsjs/go/main/App.ts`
+- `app.go` exposes methods used by frontend.
+- `main.go` binds `App` into Wails runtime.
+- Generated bindings live in `frontend/wailsjs/go/main/`.
+- Frontend Wails wrapper is in `frontend/src/shared/api/wails/client.ts`.
 
-**Svelte Frontend** calls Go methods:
-- [frontend/src/services/wails-api.ts](frontend/src/services/wails-api.ts) - Wraps generated bindings
-- Components import and call `appService.getState()`, `appService.startProxy()`, etc.
+### Frontend Module Boundaries
 
-**Real-time Events**:
-- Backend emits: `wruntime.EventsEmit(ctx, "log:entry", entry)`
-- Frontend subscribes: `EventsOn("log:entry", callback)`
+Current frontend layout:
 
-### Core Modules
+```text
+frontend/src/
+  App.svelte           # app bootstrap and shell wiring
+  app/                 # app shell orchestration, overlays, top-level services, shared app contracts
+    api/
+    lib/
+    modals/
+    providers/
+    services/
+      app-controller.ts
+      logs-subscription.ts
+      startup-warnings.ts
+    shell/
+    types.ts
+  features/            # domain features and feature-local UI/helpers
+    accounts/
+      components/
+        connect/
+        list/
+        modals/
+    router/
+      components/
+        cli-sync/
+        cloudflared/
+        endpoint-tester/
+        model-alias/
+        proxy/
+        scheduling/
+    logs/
+      components/
+      lib/
+    usage/
+      components/
+      lib/
+  shared/              # cross-feature utilities and stores
+    api/wails/
+    lib/
+    stores/
+  components/common/   # reusable primitives
+  tabs/                # tab wrappers that compose app/features
+  styles/              # base/theme/component stylesheets
+```
 
-#### 1. Gateway Service ([internal/gateway/server.go](internal/gateway/server.go))
-OpenAI-compatible and Anthropic-compatible HTTP server with routes:
-- `POST /v1/responses` - OpenAI Responses API
-- `POST /v1/chat/completions` - Main chat endpoint
-- `POST /v1/completions` - Legacy completions
-- `POST /v1/messages` - Anthropic-compatible messages endpoint
-- `GET /v1/models` - List available models
-- `GET /health`, `GET /v1/stats` - Monitoring
+Key frontend files:
 
-**Request Flow**:
-1. Receives OpenAI-format request
-2. Gets available account from pool
-3. Ensures fresh token via `auth.EnsureFreshAccount()`
-4. Translates protocol requests into provider-specific runtime payloads
-5. Streams or collects response
-6. Updates account stats, health state, and cooldowns
+- Root shell and orchestration:
+  - `frontend/src/App.svelte`
+  - `frontend/src/app/services/app-controller.ts`
+  - `frontend/src/app/providers/AppOverlayStack.svelte`
+  - `frontend/src/app/shell/AppFrame.svelte`
+- Accounts feature:
+  - `frontend/src/features/accounts/components/AccountsWorkspace.svelte`
+- Router feature:
+  - `frontend/src/features/router/components/proxy/ProxyControlsPanel.svelte`
+  - `frontend/src/features/router/components/proxy/ProxyRuntimeCard.svelte`
+  - `frontend/src/features/router/components/proxy/ProxySecurityCard.svelte`
+  - `frontend/src/features/router/components/scheduling/SchedulingPanel.svelte`
+  - `frontend/src/features/router/components/cloudflared/CloudflaredPanel.svelte`
+  - `frontend/src/features/router/components/endpoint-tester/EndpointTesterPanel.svelte`
+  - `frontend/src/features/router/components/model-alias/ModelAliasPanel.svelte`
+  - `frontend/src/features/router/components/cli-sync/CliSyncPanel.svelte`
+- Logs and usage feature workspaces:
+  - `frontend/src/features/logs/components/SystemLogsWorkspace.svelte`
+  - `frontend/src/features/logs/lib/logs-view.ts`
+  - `frontend/src/features/usage/components/UsageWorkspace.svelte`
+  - `frontend/src/features/usage/lib/request-log.ts`
 
-**Retry Logic**: Tries available accounts on failure, distinguishes transient cooldown from durable disable/banned states, and emits provider availability diagnostics when the pool is empty.
+### Backend Core Modules
 
-#### 2. Auth System ([internal/auth/codex.go](internal/auth/codex.go))
-- **OAuth 2.0 PKCE flow** for ChatGPT authentication
-- **Kiro auth flows** in [internal/auth/kiro.go](internal/auth/kiro.go):
-  - AWS Builder ID device flow
-  - Google/GitHub social login via local callback server
-- **Token management**: Stores access/refresh/id tokens, auto-refreshes before expiry (5min skew)
-- **Callback server**: Runs on `localhost:1455` to receive OAuth redirects
-- **Session tracking**: Polls auth status, emits events to frontend
+- **Gateway**: `internal/gateway/`
+  - OpenAI + Anthropic endpoint handlers
+  - Provider routing + retry + availability diagnostics
+- **Routing & Model Resolution**: `internal/route/`
+  - Provider resolution, model catalogs, alias-aware selection
+- **Auth**: `internal/auth/`
+  - Codex OAuth flow + Kiro auth flows
+- **Provider Services**: `internal/provider/`
+  - Codex and Kiro request execution
+  - Quota service orchestration (`internal/provider/quota/service.go`)
+  - Thinking parsing/arbitration under `internal/provider/thinking/`
+- **Config Storage**: `internal/config/`
+  - Snapshot + atomic updates over JSON files
+- **Structured Logging**: `internal/logger/`
+  - In-memory + persistent JSONL log storage
+  - Structured entries with `level`, `scope`, `event`, `requestId`, `message`, and `fields`
+- **Sync Services**: `internal/sync/`
+  - `internal/sync/cliconfig/` for one-click CLI config patch/read/write
+  - `internal/sync/authtoken/` for account auth token sync into supported CLIs
+- **Cloudflared**: `internal/cloudflared/manager.go`
+  - Install, start/stop tunnel, parse URL/status
+- **Contracts & Protocol Codecs**:
+  - `internal/contract/` holds protocol-neutral request/response types and validation rules
+  - `internal/protocol/openai/` and `internal/protocol/anthropic/` hold protocol types plus decode/encode pipelines
 
-#### 3. Config Management ([internal/config/config.go](internal/config/config.go))
-- **Multi-file storage**: Separates concerns into `config.json`, `accounts.json`, `stats.json`
-- **Storage layer** ([internal/config/storage.go](internal/config/storage.go)): Handles file I/O for each data type
-- **Manager**: In-memory cache with thread-safe access via `sync.RWMutex`
-- **Atomic updates**: `UpdateAccount(id, func(*Account))` pattern
-- **Snapshot pattern**: `Snapshot()` returns immutable copy for UI
-- **Auto-save**: Writes to disk on every mutation (only affected file)
+## One-Click CLI Sync Details
 
-#### 4. Connection Pooling ([internal/account/pool.go](internal/account/pool.go))
-- **Round-robin selection** with atomic counter
-- **Availability filtering**: Skips banned, durably disabled, cooldown, or quota-exhausted accounts
-- **No pre-warming**: Accounts validated on-demand by proxy service
+CLI sync lives under API Router and is implemented in `internal/sync/cliconfig/`.
 
-#### 5. Quota System ([internal/auth/quota.go](internal/auth/quota.go))
-- **Multi-endpoint fallback**: Tries `/quota`, `/limits`, `/me` endpoints
-- **Bucket-based tracking**: Per-model usage limits with reset times
-- **Refresh strategies**: Manual, batch, or automatic on auth errors
+Account auth-sync is separate and implemented in `internal/sync/authtoken/`.
 
-#### 6. Logger ([internal/logger/logger.go](internal/logger/logger.go))
-- **Ring buffer** with configurable capacity (default 1000 entries)
-- **Event emission**: Broadcasts log entries to frontend via Wails events
-- **Levels**: Info, Error, Debug
-- **Context attachment**: Binds to Wails context for event emission
+Targets and config files:
 
-#### 7. Cloudflared Public Access ([internal/cloudflared/manager.go](internal/cloudflared/manager.go))
-- **Binary management**: Downloads Cloudflared into `~/.cliro-go/bin/`
-- **Tunnel modes**: Supports quick tunnels and token-based named tunnels
-- **Process lifecycle**: Starts/stops with explicit API Router actions and follows proxy restarts
-- **Status extraction**: Parses stdout/stderr to discover public tunnel URLs and process errors
+- `claude-code` -> `~/.claude/settings.json` + `~/.claude.json`
+- `opencode-cli` -> `~/.config/opencode/opencode.json`
+- `kilo-cli` -> `~/.config/kilo/opencode.json`
+- `codex-ai` -> `~/.codex/config.toml` + `~/.codex/auth.json`
 
-## Key Patterns & Conventions
+For OpenCode/Kilo JSON config generation:
 
-### Go Code Style
+- `$schema` is set to `https://opencode.ai/config.json`
+- provider key is `CLIRO`
+- `permission.bash = "allow"`
+- selected model is injected from local catalog (`GetLocalModelCatalog()`)
 
-Follow idiomatic Go conventions from the `go-naming` and `golang-patterns` skills:
+Kilo install detection:
 
-**Naming**:
-- Packages: lowercase, single word (e.g., `proxy`, `auth`, `config`)
-- Exported types: PascalCase (e.g., `Manager`, `Service`, `Account`)
-- Unexported: camelCase (e.g., `proxyBindHost`, `resolveDataDir`)
-- Receivers: 1-2 letter abbreviations (e.g., `a *App`, `m *Manager`)
+- Treated as installed when `~/.config/kilo` exists (even if binary is not in PATH).
 
-**Error Handling**:
-- Return errors, don't panic (except in `main()` or `startup()`)
-- Wrap errors with context: `fmt.Errorf("failed to start proxy: %w", err)`
-- Check errors immediately after function calls
+## Real-Time Events
 
-**Concurrency**:
-- Use `sync.RWMutex` for shared state (see [config.go](internal/config/config.go))
-- Atomic operations for counters (see [pool.go](internal/pool/pool.go))
-- Context propagation for cancellation
+- Backend emits log events via Wails runtime events.
+- Frontend subscribes via `frontend/src/app/services/logs-subscription.ts` and renders in system logs UI.
+- Structured log entries now include `level`, `scope`, `event`, `requestId`, `message`, and optional `fields`.
+- The system logs table is optimized around `Level / Source / Account / Detail / Time`; update `frontend/src/features/logs/lib/logs-view.ts` when `logger.Entry` shape changes.
 
-### Frontend Code Style
+## Key App Methods (Wails -> Frontend)
 
-**Svelte Components**:
-- Use `<script lang="ts">` for TypeScript
-- Reactive statements: `$: derivedValue = sourceValue * 2`
-- Store subscriptions: `$storeName` auto-subscribes
+Important methods exposed in `app.go`:
 
-**Tailwind CSS**:
-- Utility-first approach
-- Custom colors defined in [tailwind.config.cjs](frontend/tailwind.config.cjs)
-- Responsive: `md:`, `lg:` prefixes
+### State & Logs
 
-**Type Safety**:
-- Import generated types from `wailsjs/go/models.ts`
-- Define component props with TypeScript interfaces
-- Use `svelte-check` to catch type errors
+- `GetState()`
+- `GetAccounts()`
+- `GetProxyStatus()`
+- `RefreshCloudflaredStatus()`
+- `GetLogs(limit int)`
+- `ClearLogs()`
+- `GetHostName()`
+
+### Proxy & Router Controls
+
+- `StartProxy()` / `StopProxy()`
+- `SetProxyPort(port int)`
+- `SetAllowLAN(enabled bool)`
+- `SetAutoStartProxy(enabled bool)`
+- `SetProxyAPIKey(apiKey string)`
+- `RegenerateProxyAPIKey()`
+- `SetAuthorizationMode(enabled bool)`
+- `SetSchedulingMode(mode string)`
+- `GetModelAliases()` / `SetModelAliases(aliases map[string]string)`
+
+### Cloudflared
+
+- `InstallCloudflared()`
+- `StartCloudflared()`
+- `StopCloudflared()`
+- `SetCloudflaredConfig(mode, token string, useHTTP2 bool)`
+
+### Account Auth & Quota
+
+- `StartCodexAuth()` / `GetCodexAuthSession()` / `CancelCodexAuth()` / `SubmitCodexAuthCode()`
+- `StartKiroAuth()` / `StartKiroSocialAuth()` / `GetKiroAuthSession()` / `CancelKiroAuth()` / `SubmitKiroAuthCode()`
+- `RefreshAccount(accountID string)`
+- `RefreshAccountWithQuota(accountID string)`
+- `RefreshQuota(accountID string)`
+- `RefreshAllQuotas()`
+- `ForceRefreshAllQuotas()`
+- `ToggleAccount(accountID string, enabled bool)`
+- `DeleteAccount(accountID string)`
+- `ImportAccounts(accounts []config.Account)`
+- `ClearCooldown(accountID string)`
+
+### CLI Sync
+
+- `GetLocalModelCatalog()`
+- `GetCLISyncStatuses()`
+- `SyncCLIConfig(appID, model string)`
+- `GetCLISyncFileContent(appID, path string)`
+- `SaveCLISyncFileContent(appID, path, content string)`
+
+### Account Auth Sync
+
+- `SyncCodexAccountToKiloAuth(accountID string)`
+- `SyncCodexAccountToCodexCLI(accountID string)`
+- `SyncCodexAccountToOpencodeAuth(accountID string)`
+
+### Utilities
+
+- `OpenExternalURL(rawURL string)`
+- `OpenDataDir()`
+
+## Proxy Endpoints
+
+Default base URL: `http://localhost:8095`
+
+- `POST /v1/responses`
+- `POST /v1/chat/completions`
+- `POST /v1/completions`
+- `POST /v1/messages`
+- `POST /v1/messages/count_tokens`
+- `GET /v1/models`
+- `GET /v1/stats`
+- `GET /health`
+
+## Coding Conventions
+
+### Go
+
+- Keep changes idiomatic and small per package boundary.
+- Wrap errors with context (`fmt.Errorf("context: %w", err)`).
+- Prefer immutable snapshot reads + atomic update closures for config/account mutations.
+- Avoid panics in runtime paths.
+
+### Frontend (Svelte + TS)
+
+- Keep data access inside feature/shared API modules rather than ad-hoc Wails calls in UI.
+- Reuse `components/common/` primitives and shared stores.
+- Keep tab files thin; place business logic in `features/*` and `app/*` modules.
+- Keep router sub-surfaces under feature-owned folders (`proxy/`, `cloudflared/`, `cli-sync/`, `endpoint-tester/`, `model-alias/`, `scheduling/`).
+- When system log structure changes, update both `frontend/src/features/logs/lib/logs-view.ts` and `frontend/src/features/logs/components/SystemLogsWorkspace.svelte` together.
+- Use `npm run check` before finalizing changes.
 
 ## Common Tasks
 
-### Adding a New Go Method for Frontend
-
-1. Add method to `App` struct in [app.go](app.go):
-```go
-func (a *App) MyNewMethod(param string) (string, error) {
-    // Implementation
-    return result, nil
-}
-```
-
-2. Rebuild or run `wails dev` - bindings auto-generate
-
-3. Use in frontend:
-```typescript
-import { MyNewMethod } from '@/wailsjs/go/main/App';
-const result = await MyNewMethod("value");
-```
-
-### Adding a New Proxy Endpoint
-
-1. Add or extend handler logic in [internal/gateway/openai_handlers.go](internal/gateway/openai_handlers.go) or [internal/gateway/anthropic_handlers.go](internal/gateway/anthropic_handlers.go)
-2. Register or wire the route in [internal/gateway/server.go](internal/gateway/server.go)
-3. Update model/provider validation in `internal/route/` if needed
-4. Test with curl or targeted Go tests
-
-### Adding a New Config Field
-
-1. Add field to `Config` struct in [internal/config/config.go](internal/config/config.go)
-2. Add getter/setter methods to `Manager`
-3. Update `Snapshot()` to include new field
-4. Update frontend types if exposed via `GetState()`
-
-### Emitting Events to Frontend
-
-```go
-import wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
-// In any method with access to a.ctx
-wruntime.EventsEmit(a.ctx, "my:event", data)
-```
-
-```typescript
-// In Svelte component
-import { EventsOn } from '@/wailsjs/runtime/runtime';
-
-onMount(() => {
-    EventsOn("my:event", (data) => {
-        console.log(data);
-    });
-});
-```
-
-## Gotchas & Important Notes
-
-### Authentication Flow
-- User clicks "Add Account" → `StartCodexAuth()` called
-- Opens browser to ChatGPT OAuth page
-- User logs in, redirects to `localhost:1455/auth/callback`
-- Backend exchanges code for tokens, saves account
-- Frontend polls `GetCodexAuthSession(sessionId)` until success/error
-
-### Kiro Authentication Flow
-- Kiro supports two login paths:
-  - `StartKiroAuth()` → AWS Builder ID device authorization
-  - `StartKiroSocialAuth(provider)` → Google/GitHub social login via local callback server
-- Kiro social login uses a localhost callback on port `9876` by default, with dynamic-port fallback if busy.
-- Kiro runtime endpoints are fixed to `q.us-east-1.amazonaws.com` and `codewhisperer.us-east-1.amazonaws.com`; do not make them region-aware unless the upstream behavior is re-verified.
-- Current Kiro runtime user-agent version is `0.10.32`.
-
-### Port Requirements
-- **Proxy**: Default 8095 (configurable in settings)
-- **OAuth Callback**: Port 1455 (hardcoded, must be free)
-
-### Data Persistence
-- Config stored in `~/.cliro-go/` directory with multiple JSON files:
-  - `config.json` - Application settings (proxy port, LAN access, auto-start)
-  - `accounts.json` - All ChatGPT account data with tokens and stats
-  - `stats.json` - Proxy usage statistics
-- No database - file-based storage
-- **Security**: Tokens stored in plaintext - file permissions are critical (0600)
-
-### Token Refresh
-- Tokens auto-refresh when < 5min until expiry
-- Manual refresh available per account
-- Refresh failures trigger cooldown and error logging
-
-### Account Availability
-- Accounts filtered by: enabled flag, health state, cooldown status, and quota exhaustion
-- Pool reports availability breakdowns (`ready`, quota cooldown, transient cooldown, durable disabled, banned)
-- Proxy retries with next account on failure and only returns provider-unavailable when all matching accounts are unavailable
-
-### CORS & Security
-- Proxy allows all origins by default (for local development)
-- No authentication on proxy endpoints
-- **Warning**: Exposing to LAN (0.0.0.0) makes proxy accessible to network
-
-### Development Hot Reload
-- `wails dev` watches both Go and frontend files
-- Go changes trigger backend rebuild
-- Frontend changes trigger Vite HMR
-- Bindings regenerate automatically on Go method changes
- 
-
-## Testing Strategy
-
-### Manual Testing
-1. Run `wails dev`
-2. Add account via OAuth flow
-3. Start proxy server
-4. Test endpoints with curl
-5. Monitor logs in UI
-
-### Integration Testing
-- Test full OAuth flow with real ChatGPT account
-- Verify token refresh logic
-- Test quota exhaustion handling
-- Verify account rotation in pool
-
-### Frontend Testing
-- Use `npm run check` for type checking
-- Manual UI testing in dev mode
-- Test event subscriptions and real-time updates
-
-## Debugging Tips
-
-### Backend Debugging
-- Check logs in UI or via `GetLogs()` method
-- Add `a.log.Info("module", "message")` for tracing
-- Use `fmt.Printf()` in dev mode (not in production)
-- Check `~/.cliro-go/config.json` for state inspection
-
-### Frontend Debugging
-- Open DevTools in Wails window (F12 or Cmd+Option+I)
-- Console logs visible in browser DevTools
-- Check Network tab for Wails IPC calls
-- Use Svelte DevTools extension
-
-### Common Issues
-- **"Port already in use"**: Change proxy port in settings or kill process
-- **"No accounts available"**: Check account enabled status and cooldowns
-- **"OAuth callback failed"**: Ensure port 1455 is free
-- **"Token expired"**: Manual refresh or wait for auto-refresh
-
-## API Reference
-
-### App Struct Methods (Exposed to Frontend)
-
-All methods in [app.go](app.go) are automatically bound to frontend via Wails:
-
-```go
-// State Management
-GetState() State                              // Get full app state snapshot
-GetAccounts() []config.Account                // Get all accounts
-GetProxyStatus() map[string]any               // Get proxy server status
-GetLogs(limit int) []logger.Entry             // Get recent log entries
-GetHostName() string                           // Get local machine host name
-
-// Proxy Control
-StartProxy() error                            // Start proxy server
-StopProxy() error                             // Stop proxy server
-SetProxyPort(port int) error                  // Change proxy port
-SetAllowLAN(allow bool) error                 // Toggle LAN access
-SetAutoStartProxy(autoStart bool) error       // Toggle auto-start
-SetProxyAPIKey(apiKey string) error           // Set proxy API key
-RegenerateProxyAPIKey() (string, error)       // Generate and persist a new proxy API key
-SetAuthorizationMode(enabled bool) error      // Require API key for all proxy routes
-SetSchedulingMode(mode string) error          // Update account scheduling mode
-SetCircuitBreaker(enabled bool) error         // Toggle staged cooldown breaker
-SetCircuitSteps(steps []int) error            // Update breaker cooldown steps
-SetCloudflaredConfig(mode, token string, useHTTP2 bool) error // Save Cloudflared config
-InstallCloudflared() error                    // Download Cloudflared binary
-StartCloudflared() error                      // Start public tunnel
-StopCloudflared() error                       // Stop public tunnel
-
-// Account Management
-StartCodexAuth() (*auth.CodexAuthStart, error)           // Initiate OAuth flow
-GetCodexAuthSession(sessionID string) auth.CodexAuthSessionView  // Poll auth status
-CancelCodexAuth(sessionID string)                        // Cancel OAuth flow
-StartKiroAuth() (*auth.KiroAuthStart, error)             // Start Kiro device auth
-StartKiroSocialAuth(provider string) (*auth.KiroAuthStart, error) // Start Kiro social auth
-GetKiroAuthSession(sessionID string) auth.KiroAuthSessionView     // Poll Kiro auth status
-CancelKiroAuth(sessionID string)                         // Cancel Kiro auth flow
-RefreshAccount(accountID string) error                   // Refresh account tokens
-RefreshQuota(accountID string) error                     // Refresh quota info
-RefreshAllQuotas() error                                 // Refresh all account quotas
-ForceRefreshAllQuotas() error                            // Refresh all quotas without smart skips
-DeleteAccount(accountID string) error                    // Delete account
-ToggleAccount(accountID string, enabled bool) error      // Enable/disable account
-ClearCooldown(accountID string) error                    // Clear cooldown timer
-ImportAccounts(accounts []config.Account) (int, error)   // Import accounts from JSON payload
-SyncCodexAccountToKiloAuth(accountID string) (auth.KiloAuthSyncResult, error)         // Sync account to Kilo CLI auth
-SyncCodexAccountToOpencodeAuth(accountID string) (auth.OpencodeAuthSyncResult, error)  // Sync account to Opencode auth
-SyncCodexAccountToCodexCLI(accountID string) (auth.CodexAuthSyncResult, error)         // Sync account to Codex CLI auth
-
-// Utilities
-ClearLogs()                                             // Clear in-memory log buffer
-OpenExternalURL(url string) error                       // Open URL in default browser
-OpenDataDir() error                                     // Open config folder in explorer
-```
-
-### Proxy Endpoints
-
-**Base URL**: `http://localhost:8095` (default)
-
-```bash
-# Health Check
-GET /health
-Response: {"status":"ok","running":true,"started_at":1234567890}
-
-# Statistics
-GET /v1/stats
-Response: {
-  "status":"ok",
-  "accounts":3,
-  "enabledAccounts":2,
-  "available":1,
-  "stats":{
-    "totalRequests":150,
-    "successRequests":145,
-    "failedRequests":5,
-    "promptTokens":12000,
-    "completionTokens":8000,
-    "totalTokens":20000
-  }
-}
-
-# List Models
-GET /v1/models
-Response: {
-  "object":"list",
-  "data":[
-    {"id":"gpt-5.2-codex","object":"model","owned_by":"codex"},
-    {"id":"claude-sonnet-4.5","object":"model","owned_by":"kiro"},
-    {"id":"claude-sonnet-4.5-thinking","object":"model","owned_by":"kiro"}
-  ]
-}
-
-# Note
-# Kiro models publish `-thinking` aliases; Codex models do not.
-
-# Chat Completions (OpenAI-compatible)
-POST /v1/chat/completions
-Content-Type: application/json
-{
-  "model": "gpt-5.2-codex",
-  "messages": [
-    {"role":"user","content":"Hello"}
-  ],
-  "stream": false,
-  "temperature": 0.7,
-  "max_tokens": 2000
-}
-
-# Legacy Completions
-POST /v1/completions
-Content-Type: application/json
-{
-  "model": "gpt-5.2-codex",
-  "prompt": "Hello",
-  "stream": false
-}
-```
-
-## Frontend Component Guide
-
-### Component Structure
-
-```
-frontend/src/
-├── components/
-│   ├── common/              # Shared reusable UI across tabs
-│   │   ├── AppHeader.svelte
-│   │   ├── AppFooter.svelte
-│   │   ├── Button.svelte
-│   │   ├── ModalBackdrop.svelte
-│   │   ├── StatusBadge.svelte
-│   │   ├── SurfaceCard.svelte
-│   │   ├── ToastViewport.svelte
-│   │   └── ToggleSwitch.svelte
-│   └── accounts/            # Accounts-specific UI components
-│       ├── AccountCard.svelte
-│       ├── AccountDetailModal.svelte
-│       ├── AccountRow.svelte
-│       ├── AccountsGrid.svelte
-│       ├── AccountsTable.svelte
-│       ├── AccountsToolbar.svelte
-│       └── ConnectPromptModal.svelte
-├── tabs/                    # Tab pages and tab-local modules
-│   ├── DashboardTab.svelte
-│   ├── AccountsTab.svelte
-│   ├── AccountsTab.css
-│   ├── ApiRouterTab.svelte
-│   ├── SystemLogsTab.svelte
-│   └── SettingsTab.svelte
-├── services/
-│   ├── wails-api.ts
-│   ├── error.ts
-│   ├── bootstrap.ts
-│   ├── proxy-actions.ts
-│   ├── auth-session.ts
-│   └── logs-subscription.ts
-├── stores/
-│   ├── theme.ts
-│   └── toast.ts
-└── utils/
-    ├── accounts/
-    │   ├── filters.ts
-    │   ├── provider.ts
-    │   ├── quota.ts
-    │   └── selection.ts
-    ├── formatters.ts
-    ├── tabs.ts
-    └── cn.ts
-```
-
-### Component Patterns
-
-**Props & Events**:
-```svelte
-<script lang="ts">
-  import type { Account } from '@/services/wails-api'
-  
-  // Props
-  export let account: Account
-  export let busy: boolean = false
-  
-  // Events
-  import { createEventDispatcher } from 'svelte'
-  const dispatch = createEventDispatcher<{
-    refresh: string  // accountId
-    delete: string
-  }>()
-  
-  function handleRefresh() {
-    dispatch('refresh', account.id)
-  }
-</script>
-
-<button on:click={handleRefresh} disabled={busy}>
-  Refresh
-</button>
-```
-
-**Reactive Statements**:
-```svelte
-<script lang="ts">
-  export let accounts: Account[]
-  
-  // Auto-recomputes when accounts changes
-  $: enabledCount = accounts.filter(a => a.enabled).length
-  $: availableCount = accounts.filter(a => 
-    a.enabled && a.cooldownUntil <= Date.now()/1000
-  ).length
-</script>
-
-<p>Enabled: {enabledCount}, Available: {availableCount}</p>
-```
-
-**Store Subscriptions**:
-```svelte
-<script lang="ts">
-  import { theme } from '@/stores/theme'
-  import { toastStore } from '@/stores/toast'
-  
-  // Auto-subscribe with $prefix
-  $: isDark = $theme === 'dark'
-  
-  function notify() {
-    toastStore.push('success', 'Title', 'Message')
-  }
-</script>
-
-<div class:dark={isDark}>
-  <button on:click={notify}>Notify</button>
-</div>
-```
-
-## Config Schema (config.json)
-
-**Location**: `~/.cliro-go/config.json`
-
-```json
-{
-  "proxyPort": 8095,
-  "allowLan": false,
-  "autoStartProxy": true,
-  "proxyApiKey": "sk-cliro_xxx",
-  "authorizationMode": false,
-  "schedulingMode": "balance",
-  "circuitBreaker": false,
-  "circuitSteps": [10, 30, 60],
-  "cloudflared": {
-    "enabled": false,
-    "mode": "quick",
-    "token": "",
-    "useHttp2": true
-  }
-}
-```
-
-**Location**: `~/.cliro-go/accounts.json`
-
-```json
-[
-  {
-    "id": "uuid-here",
-    "provider": "chatgpt",
-    "email": "user@example.com",
-    "accountId": "chatgpt-account-id",
-    "planType": "plus",
-    "quota": {
-      "status": "ok",
-      "summary": "2000/5000 requests remaining",
-      "source": "/quota",
-      "lastCheckedAt": 1234567890,
-      "buckets": [
-        {
-          "name": "gpt-5.2-codex",
-          "used": 3000,
-          "total": 5000,
-          "remaining": 2000,
-          "percent": 60,
-          "resetAt": 1234567890,
-          "status": "ok"
-        }
-      ]
-    },
-    "accessToken": "ey...",
-    "refreshToken": "ey...",
-    "idToken": "ey...",
-    "expiresAt": 1234567890,
-    "enabled": true,
-    "cooldownUntil": 0,
-    "lastError": "",
-    "requestCount": 150,
-    "errorCount": 5,
-    "promptTokens": 12000,
-    "completionTokens": 8000,
-    "totalTokens": 20000,
-    "lastUsed": 1234567890,
-    "lastRefresh": 1234567890,
-    "createdAt": 1234567890,
-    "updatedAt": 1234567890
-  }
-]
-```
-
-**Location**: `~/.cliro-go/stats.json`
-
-```json
-{
-  "totalRequests": 150,
-  "successRequests": 145,
-  "failedRequests": 5,
-  "promptTokens": 12000,
-  "completionTokens": 8000,
-  "totalTokens": 20000,
-  "lastRequestAt": 1234567890
-}
-```
-
-**Field Descriptions**:
-- `cooldownUntil`: Unix timestamp when account exits cooldown (0 = no cooldown)
-- `expiresAt`: Unix timestamp when access token expires
-- `quota.buckets`: Per-model usage limits with reset times
-- `enabled`: Whether account is active in pool rotation
-- `lastError`: Most recent error message (empty if no error)
-
-## Development Workflow
-
-### Git Workflow
-
-```bash
-# Feature branch
-git checkout -b feature/add-quota-alerts
-git add .
-git commit -m "feat: add quota alert notifications"
-git push origin feature/add-quota-alerts
-
-# Commit message format
-# feat: new feature
-# fix: bug fix
-# refactor: code restructuring
-# docs: documentation changes
-# test: add/update tests
-```
-
-### PR Checklist
-
-- [ ] Code follows Go naming conventions (`go-naming` skill)
-- [ ] Error handling with context wrapping
-- [ ] Frontend types match Go structs
-- [ ] Wails bindings regenerated (`wails dev` or `wails build`)
-- [ ] Manual testing completed
-- [ ] No console errors in DevTools 
-
-### Testing Checklist
-
-**Backend**:
-- [ ] Proxy endpoints respond correctly
-- [ ] Account rotation works with multiple accounts\\
-- [ ] Token refresh triggers before expiry
-- [ ] Quota exhaustion triggers cooldown
-- [ ] Error handling doesn't panic
-
-**Frontend**:
-- [ ] UI updates on state changes
-- [ ] Event subscriptions work (logs, auth status)
-- [ ] Loading states display correctly
-- [ ] Error toasts show helpful messages
-- [ ] Type checking passes (`npm run check`)
-
-## Performance Tips
-
-### Backend Optimization
-
-**Avoid Blocking Operations**:
-```go
-// Bad: Blocks main thread
-func (a *App) SlowOperation() error {
-    time.Sleep(10 * time.Second)
-    return nil
-}
-
-// Good: Run in goroutine, emit events
-func (a *App) SlowOperation() error {
-    go func() {
-        time.Sleep(10 * time.Second)
-        wruntime.EventsEmit(a.ctx, "operation:done", nil)
-    }()
-    return nil
-}
-```
-
-**Minimize Config Writes**:
-```go
-// Bad: Multiple writes
-store.SetProxyPort(8095)
-store.SetAllowLAN(true)
-store.SetAutoStartProxy(true)
-
-// Good: Batch updates
-store.UpdateAccount(id, func(a *config.Account) {
-    a.Enabled = true
-    a.CooldownUntil = 0
-    a.LastError = ""
-})
-```
-
-**Use Read Locks**:
-```go
-// Read-only operations
-m.mu.RLock()
-defer m.mu.RUnlock()
-return m.cfg.ProxyPort
-
-// Write operations
-m.mu.Lock()
-defer m.mu.Unlock()
-m.cfg.ProxyPort = port
-```
-
-### Frontend Optimization
-
-**Debounce Expensive Operations**:
-```svelte
-<script lang="ts">
-  const debounce = <T extends (...args: any[]) => void>(fn: T, delay: number) => {
-    let timer: ReturnType<typeof setTimeout> | null = null
-    return (...args: Parameters<T>) => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => fn(...args), delay)
-    }
-  }
-   
-  const refreshQuotas = debounce(async () => {
-    await appService.refreshAllQuotas()
-  }, 1000)
-</script>
-```
-
-**Avoid Unnecessary Reactivity**:
-```svelte
-<script lang="ts">
-  // Bad: Recomputes on every state change
-  $: expensiveValue = accounts.map(a => computeExpensive(a))
-  
-  // Good: Only recomputes when accounts change
-  $: expensiveValue = accounts.length > 0 
-    ? accounts.map(a => computeExpensive(a)) 
-    : []
-</script>
-```
-
-## Security Best Practices
-
-### Token Handling
-
-**Never Log Tokens**:
-```go
-// Bad
-a.log.Info("auth", "token: "+account.AccessToken)
-
-// Good
-a.log.Info("auth", "token refreshed for "+account.Email)
-```
-
-**Secure Config File**:
-```go
-// Set restrictive permissions on config file
-os.Chmod(configPath, 0o600)  // Owner read/write only
-```
-
-### CORS Configuration
-
-**Development** (current):
-```go
-w.Header().Set("Access-Control-Allow-Origin", "*")
-```
-
-**Production** (recommended):
-```go
-allowedOrigins := []string{"http://localhost:3000"}
-origin := r.Header.Get("Origin")
-if slices.Contains(allowedOrigins, origin) {
-    w.Header().Set("Access-Control-Allow-Origin", origin)
-}
-```
-
-### LAN Exposure
-
-**Warning**: Setting `allowLan: true` binds proxy to `0.0.0.0`, making it accessible to entire network.
-
-**Mitigation**:
-- Add API key authentication
-- Use firewall rules to restrict access
-- Only enable when necessary
-- Consider VPN for remote access
-
-## Deployment Guide
-
-### Building for Production
-
-**Windows**:
-```bash
-wails build
-# Output: build/bin/Cliro-Go.exe
-```
-
-**Cross-compilation**:
-```bash
-# Build for Windows from Linux/Mac
-wails build -platform windows/amd64
-
-# Build for macOS
-wails build -platform darwin/universal
-
-# Build for Linux
-wails build -platform linux/amd64
-```
-
-### Distribution
-
-**Portable Mode**:
-- Executable is self-contained
-- Config created at `~/.cliro-go/` on first run
-- No installer needed
-
-**Installer** (optional):
-- Use Inno Setup (Windows)
-- Use DMG (macOS)
-- Use AppImage/DEB (Linux)
-
-### Updates
-
-**Manual**:
-1. Download new executable
-2. Replace old executable
-3. Config persists automatically
-
-**Auto-update** (future):
-- Implement version check endpoint
-- Download and replace executable
-- Restart application
-
-## Troubleshooting Guide
-
-### Common Errors
-
-**"Port already in use"**:
-```bash
-# Windows: Find process using port
-netstat -ano | findstr :8095
-taskkill /PID <pid> /F
-
-# Change port in settings or config.json
-```
-
-**"No accounts available"**:
-- Check account enabled status
-- Clear cooldowns if stuck
-- Verify tokens not expired
-- Refresh quota to check limits
-
-**"OAuth callback failed"**:
-- Ensure port 1455 is free
-- Check firewall allows localhost:1455
-- Try restarting auth flow
-- Check browser console for errors
-
-**"Token expired"**:
-- Manual refresh via UI
-- Wait for auto-refresh (triggers at <5min remaining)
-- Re-authenticate if refresh token invalid
-
-**"Quota exhausted"**:
-- Account enters cooldown automatically
-- Cooldown clears at reset time
-- Add more accounts for rotation
-- Check quota limits in account details
-
-### Upstream API Errors
-
-These errors come from ChatGPT Codex API, not from CLIro-Go:
-
-**"Not supported when use chatgpt account"**:
-- **Cause**: Feature/model not available for your ChatGPT plan type
-- **Solution**: 
-  - Check account `planType` in config.json (free, plus, team, enterprise)
-  - Upgrade to ChatGPT Plus/Team for Codex model access
-  - Some models (gpt-5.2-codex, gpt-5.3-codex) require paid plans
-  - Free accounts have limited model access
-
-**"Usage limit reached"**:
-- **Cause**: Account hit quota limit for current period
-- **Behavior**: CLIro-Go auto-cooldown until reset time
-- **Solution**: Wait for quota reset or add more accounts
-
-**"Unauthorized" / "Forbidden"**:
-- **Cause**: Token invalid or expired
-- **Behavior**: Account enters 1-minute transient cooldown
-- **Solution**: Refresh token manually or re-authenticate
-
-**Plan Type Limitations**:
-```
-Free:       Limited models, low quota
-Plus:       Full Codex access, higher quota
-Team:       Shared quota pool, admin controls
-Enterprise: Custom limits, priority access
-```
-
-**Checking Plan Type**:
-```bash
-# Windows
-notepad %USERPROFILE%\.cliro-go\config.json
-
-# Look for "planType" field in accounts array
-# Values: "free", "plus", "team", "enterprise"
-```
-
-### Debug Mode
-
-**Enable verbose logging**:
-```go
-// In logger.go, add Debug level
-a.log.Debug("module", "detailed message")
-```
-
-**Frontend DevTools**:
-```javascript
-// In browser console
-localStorage.setItem('debug', 'true')
-location.reload()
-```
-
-**Inspect Config**:
-```bash
-# Windows
-notepad %USERPROFILE%\.cliro-go\config.json
-
-# Linux/Mac
-cat ~/.cliro-go/config.json | jq
-```
+### Add a New Wails Method
+
+1. Add exported method to `app.go`.
+2. Run `wails dev` or `wails build` to regenerate JS/TS bindings.
+3. Expose via `frontend/src/shared/api/wails/client.ts`.
+4. Wire feature-level adapter/API module.
+
+### Add a New Proxy Capability
+
+1. Update protocol decode/encode logic in `internal/protocol/openai/` and/or `internal/protocol/anthropic/` if protocol mapping is needed.
+2. Update gateway handlers in `internal/gateway/`.
+3. Update route validation and model resolution in `internal/route/`.
+4. Add tests for both OpenAI and Anthropic request paths.
+
+### Add/Change CLI Sync Target
+
+1. Add `App` constant + `appDefinition` in `internal/sync/cliconfig/service.go`.
+2. Implement read/patch logic for status + sync.
+3. Extend frontend type union (`CliSyncAppID`) and router card metadata.
+4. Add tests in `internal/sync/cliconfig/service_test.go`.
+
+## Testing Checklist
+
+- `go test . ./internal/...` passes.
+- `cd frontend && npm run check` passes.
+- Manually verify API Router flows if router state/config behavior changed:
+  - proxy start/stop
+  - model alias save/apply
+  - Cloudflared install/start/stop
+  - one-click CLI sync statuses and write paths
+- Manually verify System Logs if logger schema/UI changes:
+  - level/source/account/detail/time columns render correctly
+  - request/account-related fields are summarized into the expected columns
+  - copy/export still includes the structured entry content
+
+## Security Notes
+
+- Tokens are local-file persisted; never print tokens in logs.
+- When enabling LAN binding (`allowLan=true`), strongly pair with authorization mode.
+- API key headers accepted in auth mode:
+  - `Authorization: Bearer <key>`
+  - `X-API-Key: <key>`
+
+## Troubleshooting Hints
+
+- **Proxy won’t start**: port conflict; change port or free process.
+- **No available accounts**: check enabled flag, cooldown, quota status, and auth validity.
+- **Cloudflared URL missing**: ensure proxy is running and Cloudflared status refreshed.
+- **CLI sync says unsupported target/model**: verify target ID union and local model catalog membership.
 
 ## References
 
-- **Wails Documentation**: https://wails.io/docs/introduction
-- **Svelte Documentation**: https://svelte.dev/docs
-- **Go Style Guide**: Use `go-naming` and `golang-patterns` skills
-- **Related Projects**: See `z_references/` for reference implementations
+- Wails docs: `https://wails.io/docs/introduction`
+- Svelte docs: `https://svelte.dev/docs`
+- Project overview: `README.md`
+- Release notes: `CHANGELOG.md`
+- Frontend package notes: `frontend/README.md`

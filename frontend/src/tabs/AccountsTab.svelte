@@ -1,59 +1,33 @@
 <script lang="ts">
+  import type { AppActions, AppShellState, AccountsActions } from '@/app/services/app-controller'
   import AccountsWorkspace from '@/features/accounts/components/AccountsWorkspace.svelte'
-  import type {
-    Account,
-    AuthSession,
-    CodexAuthSyncResult,
-    KiloAuthSyncResult,
-    KiroAuthSession,
-    OpencodeAuthSyncResult
-  } from '@/features/accounts/types'
 
-  export let accounts: Account[] = []
-  export let busyAccountIds: string[] = []
-  export let authSession: AuthSession | null = null
-  export let kiroAuthSession: KiroAuthSession | null = null
-  export let authWorking = false
-  export let refreshingAllQuotas = false
-  export let onStartConnect: () => Promise<void>
-  export let onCancelConnect: () => Promise<void>
-  export let onStartKiroConnect: (method: 'device' | 'google' | 'github') => Promise<void>
-  export let onCancelKiroConnect: () => Promise<void>
-  export let onOpenExternalURL: (url: string) => Promise<void>
-  export let onRefreshAllQuotas: () => Promise<void>
-  export let onForceRefreshAllQuotas: () => Promise<void>
-  export let onToggleAccount: (accountId: string, enabled: boolean) => Promise<void>
-  export let onBulkToggleAccounts: (accountIds: string[], enabled: boolean) => Promise<void>
-  export let onBulkDeleteAccounts: (accountIds: string[]) => Promise<void>
-  export let onImportAccounts: (accounts: Account[]) => Promise<number>
-  export let onSyncCodexAccountToKiloAuth: (accountId: string) => Promise<KiloAuthSyncResult>
-  export let onSyncCodexAccountToOpencodeAuth: (accountId: string) => Promise<OpencodeAuthSyncResult>
-  export let onSyncCodexAccountToCodexCLI: (accountId: string) => Promise<CodexAuthSyncResult>
-  export let onRefreshAccountWithQuota: (accountId: string) => Promise<void>
-  export let onDeleteAccount: (accountId: string) => Promise<void>
+  export let shell: AppShellState
+  export let appActions: AppActions
+  export let accountsActions: AccountsActions
 </script>
 
 <AccountsWorkspace
-  {accounts}
-  {busyAccountIds}
-  {authSession}
-  {kiroAuthSession}
-  {authWorking}
-  {refreshingAllQuotas}
-  {onStartConnect}
-  {onCancelConnect}
-  {onStartKiroConnect}
-  {onCancelKiroConnect}
-  {onOpenExternalURL}
-  {onRefreshAllQuotas}
-  {onForceRefreshAllQuotas}
-  {onToggleAccount}
-  {onBulkToggleAccounts}
-  {onBulkDeleteAccounts}
-  {onImportAccounts}
-  {onSyncCodexAccountToKiloAuth}
-  {onSyncCodexAccountToOpencodeAuth}
-  {onSyncCodexAccountToCodexCLI}
-  {onRefreshAccountWithQuota}
-  {onDeleteAccount}
+  accounts={shell.accounts}
+  busyAccountIds={shell.busyAccountIds}
+  authSession={shell.authSession}
+  kiroAuthSession={shell.kiroAuthSession}
+  authWorking={shell.authWorking}
+  refreshingAllQuotas={shell.refreshingAllQuotas}
+  onStartConnect={accountsActions.startConnect}
+  onCancelConnect={accountsActions.cancelConnect}
+  onStartKiroConnect={accountsActions.startKiroConnect}
+  onCancelKiroConnect={accountsActions.cancelKiroConnect}
+  onOpenExternalURL={appActions.openExternalURL}
+  onRefreshAllQuotas={accountsActions.refreshAllQuotas}
+  onForceRefreshAllQuotas={accountsActions.forceRefreshAllQuotas}
+  onToggleAccount={accountsActions.toggleAccount}
+  onBulkToggleAccounts={accountsActions.bulkToggleAccounts}
+  onBulkDeleteAccounts={accountsActions.bulkDeleteAccounts}
+  onImportAccounts={accountsActions.importAccounts}
+  onSyncCodexAccountToKiloAuth={accountsActions.syncCodexAccountToKiloAuth}
+  onSyncCodexAccountToOpencodeAuth={accountsActions.syncCodexAccountToOpencodeAuth}
+  onSyncCodexAccountToCodexCLI={accountsActions.syncCodexAccountToCodexCLI}
+  onRefreshAccountWithQuota={accountsActions.refreshAccountWithQuota}
+  onDeleteAccount={accountsActions.deleteAccount}
 />
