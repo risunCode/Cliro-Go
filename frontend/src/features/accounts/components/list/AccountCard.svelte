@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { Clock, Zap } from 'lucide-svelte'
+  import { Zap } from 'lucide-svelte'
   import AccountActions from './AccountActions.svelte'
   import ProviderAvatar from './ProviderAvatar.svelte'
   import type { Account } from '@/features/accounts/types'
   import {
     formatBucketLabel,
     formatMetricValue,
-    formatRelativeReset,
+    formatResetHint,
     getPercentColor,
     hasValidReset,
     metricPercent
@@ -33,6 +33,9 @@ export let deleteInProgress = false
   $: presentation = presentAccount(account)
   $: canSync = presentation.canSync
   $: metrics = presentation.metrics
+  $: quotaDisplayMode = presentation.quotaDisplayMode
+  $: disabledHint = presentation.disabledHint
+  $: quotaHint = presentation.quotaHint
 </script>
 
 <article class={`account-card ${selected ? 'is-selected' : ''} ${account.enabled ? '' : 'is-disabled'}`}>
@@ -51,7 +54,7 @@ export let deleteInProgress = false
     </label>
   </div>
 
-  {#if (account.quota?.status === 'error' || account.quota?.status === 'warning' || account.quota?.status === 'empty') &&
+  {#if account.enabled && (account.quota?.status === 'error' || account.quota?.status === 'warning' || account.quota?.status === 'empty') &&
   (account.quota?.error || account.quota?.summary)}
     <div class={`alert alert-${account.quota?.status || 'empty'}`}>
       {account.quota?.error || account.quota?.summary}
@@ -59,8 +62,36 @@ export let deleteInProgress = false
   {/if}
 
   <div class="metrics">
-    {#if !account.enabled}
-      <div class="metric-bar metric-disabled-note">Account disabled (Reason: {presentation.disabledReason}).</div>
+    {#if !account.enabled && disabledHint}
+      <div class={`metric-bar metric-status metric-status-surface tone-${disabledHint.tone}`}>
+        <div class="metric-status-head">
+          <div class="metric-hint">
+            <span class={`metric-hint-pill tone-${disabledHint.tone}`}>{disabledHint.text}</span>
+          </div>
+          {#if disabledHint.metaPillText}
+            <span class={`metric-meta-pill tone-${disabledHint.metaPillTone || 'neutral'}`}>{disabledHint.metaPillText}</span>
+          {:else if disabledHint.resetText}
+            <span class="metric-status-reset">{disabledHint.resetText}</span>
+          {/if}
+        </div>
+        {#if disabledHint.detail}
+          <div class="metric-status-detail">{disabledHint.detail}</div>
+        {/if}
+      </div>
+    {:else if quotaDisplayMode === 'status' && quotaHint}
+      <div class={`metric-bar metric-status metric-status-surface tone-${quotaHint.tone}`}>
+        <div class="metric-status-head">
+          <div class="metric-hint">
+            <span class={`metric-hint-pill tone-${quotaHint.tone}`}>{quotaHint.text}</span>
+          </div>
+          {#if quotaHint.resetText}
+            <span class="metric-status-reset">{quotaHint.resetText}</span>
+          {/if}
+        </div>
+        {#if quotaHint.detail}
+          <div class="metric-status-detail">{quotaHint.detail}</div>
+        {/if}
+      </div>
     {:else}
       {#each metrics as bucket}
         {@const percent = metricPercent(bucket)}
@@ -78,8 +109,7 @@ export let deleteInProgress = false
           </div>
           {#if hasValidReset(bucket.resetAt)}
             <div class="metric-reset">
-              <Clock size={11} class="metric-icon" />
-              <span class="metric-time">{formatRelativeReset(bucket.resetAt)}</span>
+              <span class="metric-time">{formatResetHint(bucket.resetAt)}</span>
             </div>
           {/if}
         </div>

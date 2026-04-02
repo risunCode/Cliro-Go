@@ -22,6 +22,17 @@ type QuotaFetcher struct {
 	httpClient *http.Client
 }
 
+type usageBreakdownEntry struct {
+	CurrentUsage float64 `json:"currentUsage"`
+	UsageLimit   float64 `json:"usageLimit"`
+	Name         string  `json:"name"`
+	Type         string  `json:"type"`
+	UsageType    string  `json:"usageType"`
+	Bucket       string  `json:"bucket"`
+	Category     string  `json:"category"`
+	QuotaType    string  `json:"quotaType"`
+}
+
 func NewQuotaFetcher(httpClient *http.Client) *QuotaFetcher {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 25 * time.Second}
@@ -65,11 +76,8 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 		}
 
 		var payload struct {
-			UsageBreakdownList []struct {
-				CurrentUsage float64 `json:"currentUsage"`
-				UsageLimit   float64 `json:"usageLimit"`
-			} `json:"usageBreakdownList"`
-			SubscriptionInfo struct {
+			UsageBreakdownList []usageBreakdownEntry `json:"usageBreakdownList"`
+			SubscriptionInfo   struct {
 				SubscriptionName  string `json:"subscriptionName"`
 				SubscriptionTitle string `json:"subscriptionTitle"`
 			} `json:"subscriptionInfo"`
@@ -83,12 +91,9 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 		}
 		_ = resp.Body.Close()
 
-		used := 0
-		total := 0
-		if len(payload.UsageBreakdownList) > 0 {
-			used = int(payload.UsageBreakdownList[0].CurrentUsage)
-			total = int(payload.UsageBreakdownList[0].UsageLimit)
-		}
+		selectedUsage := selectPrimaryUsageBreakdown(payload.UsageBreakdownList)
+		used := int(selectedUsage.CurrentUsage)
+		total := int(selectedUsage.UsageLimit)
 		remaining := 0
 		if total > 0 {
 			remaining = maxInt(total-used, 0)
@@ -97,9 +102,10 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 		if total > 0 {
 			percent = int(float64(remaining) / float64(total) * 100)
 		}
+		bucketName := resolveKiroBucketName(selectedUsage)
 
 		bucket := config.QuotaBucket{
-			Name:      "credits",
+			Name:      bucketName,
 			Used:      used,
 			Total:     total,
 			Remaining: remaining,
@@ -115,7 +121,7 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 			strings.TrimSpace(payload.SubscriptionInfo.SubscriptionName),
 		)
 		if summary == "" && total > 0 {
-			summary = fmt.Sprintf("%d/%d credits remaining", remaining, total)
+			summary = fmt.Sprintf("%d/%d %s remaining", remaining, total, kiroBucketSummaryLabel(bucketName))
 		}
 		if summary == "" {
 			summary = "Kiro usage data loaded"
@@ -200,4 +206,78 @@ func applyKiroQuotaHeaders(req *http.Request, accessToken string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", kiroRuntimeUserAgent)
 	req.Header.Set("x-amz-user-agent", kiroRuntimeAmzUserAgent)
+}
+
+func selectPrimaryUsageBreakdown(items []usageBreakdownEntry) usageBreakdownEntry {
+	if len(items) == 0 {
+		return usageBreakdownEntry{}
+	}
+
+	for _, item := range items {
+		if resolveKiroBucketName(item) == "credits" {
+			return item
+		}
+	}
+
+	for _, item := range items {
+		if resolveKiroBucketName(item) == "free_trial" {
+			return item
+		}
+	}
+
+	for _, item := range items {
+		if item.UsageLimit > 0 {
+			return item
+		}
+	}
+
+	return items[0]
+}
+
+func resolveKiroBucketName(item usageBreakdownEntry) string {
+	candidates := []string{
+		item.Name,
+		item.UsageType,
+		item.Bucket,
+		item.Category,
+		item.QuotaType,
+		item.Type,
+	}
+
+	for _, candidate := range candidates {
+		normalized := normalizeKiroBucketName(candidate)
+		if normalized != "" {
+			return normalized
+		}
+	}
+
+	return "credits"
+}
+
+func normalizeKiroBucketName(raw string) string {
+	normalized := strings.TrimSpace(strings.ToLower(raw))
+	if normalized == "" {
+		return ""
+	}
+
+	normalized = strings.NewReplacer("-", "_", " ", "_").Replace(normalized)
+	for strings.Contains(normalized, "__") {
+		normalized = strings.ReplaceAll(normalized, "__", "_")
+	}
+
+	switch normalized {
+	case "free_trial", "free_trial_credits", "trial", "trial_credits", "credit_freetrial", "credit_free_trial", "credits_freetrial", "credits_free_trial":
+		return "free_trial"
+	case "credits", "credit":
+		return "credits"
+	default:
+		return normalized
+	}
+}
+
+func kiroBucketSummaryLabel(bucketName string) string {
+	if bucketName == "free_trial" {
+		return "free trial credits"
+	}
+	return "credits"
 }

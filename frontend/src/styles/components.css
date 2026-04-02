@@ -1505,6 +1505,143 @@
   color: var(--text-secondary);
 }
 
+.accounts-page .metric-hint,
+.accounts-page .table-metric-hint {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.accounts-page .metric-status {
+  gap: 2px;
+}
+
+.accounts-page .metric-status-surface {
+  --metric-color: color-mix(in srgb, var(--text-primary) 88%, var(--text-secondary));
+  --metric-border: color-mix(in srgb, var(--border-hover) 90%, transparent);
+  --metric-bg: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+}
+
+.accounts-page .metric-status-surface.tone-warning {
+  --metric-border: color-mix(in srgb, var(--warning) 30%, var(--border));
+  --metric-bg: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+.accounts-page .metric-status-surface.tone-error {
+  --metric-border: color-mix(in srgb, var(--danger) 32%, var(--border));
+  --metric-bg: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.accounts-page .metric-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.accounts-page .metric-status-head .metric-hint {
+  margin-top: 0;
+}
+
+.accounts-page .metric-status-reset {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text-secondary) 88%, var(--text-primary));
+  white-space: nowrap;
+}
+
+.accounts-page .metric-meta-pill {
+  --meta-color: var(--text-secondary);
+  --meta-border: color-mix(in srgb, var(--border-hover) 80%, transparent);
+  --meta-bg: color-mix(in srgb, var(--bg-hover) 74%, transparent);
+
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  max-width: min(70%, 16.5rem);
+  min-height: 16px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--meta-border);
+  background: var(--meta-bg);
+  color: var(--meta-color);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accounts-page .metric-meta-pill.tone-neutral {
+  --meta-color: var(--text-secondary);
+  --meta-border: color-mix(in srgb, var(--border-hover) 80%, transparent);
+  --meta-bg: color-mix(in srgb, var(--bg-hover) 74%, transparent);
+}
+
+.accounts-page .metric-meta-pill.tone-warning {
+  --meta-color: color-mix(in srgb, var(--warning) 76%, var(--text-primary));
+  --meta-border: color-mix(in srgb, var(--warning) 38%, var(--border));
+  --meta-bg: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.accounts-page .metric-meta-pill.tone-error {
+  --meta-color: color-mix(in srgb, var(--danger) 76%, var(--text-primary));
+  --meta-border: color-mix(in srgb, var(--danger) 38%, var(--border));
+  --meta-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.accounts-page .metric-status-detail {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.accounts-page .metric-hint-pill {
+  --hint-color: var(--text-secondary);
+  --hint-border: color-mix(in srgb, var(--border-hover) 86%, transparent);
+  --hint-bg: color-mix(in srgb, var(--bg-hover) 68%, transparent);
+
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 16px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--hint-border);
+  background: var(--hint-bg);
+  color: var(--hint-color);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accounts-page .metric-hint-pill.tone-neutral {
+  --hint-color: var(--text-secondary);
+  --hint-border: color-mix(in srgb, var(--border-hover) 86%, transparent);
+  --hint-bg: color-mix(in srgb, var(--bg-hover) 68%, transparent);
+}
+
+.accounts-page .metric-hint-pill.tone-warning {
+  --hint-color: color-mix(in srgb, var(--warning) 78%, var(--text-primary));
+  --hint-border: color-mix(in srgb, var(--warning) 36%, var(--border));
+  --hint-bg: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.accounts-page .metric-hint-pill.tone-error {
+  --hint-color: color-mix(in srgb, var(--danger) 76%, var(--text-primary));
+  --hint-border: color-mix(in srgb, var(--danger) 36%, var(--border));
+  --hint-bg: color-mix(in srgb, var(--danger) 11%, transparent);
+}
+
 .accounts-page .metric-time {
   color: inherit;
 }
@@ -1831,6 +1968,53 @@
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg-hover) 66%, transparent);
   padding: 0.375rem 0.5rem;
+}
+
+.accounts-page .table-metric-neutral {
+  border-color: color-mix(in srgb, var(--border-hover) 78%, transparent);
+  background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+}
+
+.accounts-page .table-metric-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.accounts-page .table-metric-status-warning {
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+.accounts-page .table-metric-status-error {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.accounts-page .table-metric-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.accounts-page .table-metric-status-head .table-metric-hint {
+  margin-top: 0;
+}
+
+.accounts-page .table-metric-status-reset {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text-secondary) 88%, var(--text-primary));
+  white-space: nowrap;
+}
+
+.accounts-page .table-metric-status-detail {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.25;
 }
 
 .accounts-page .table-metric-head {

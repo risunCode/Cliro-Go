@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"cliro-go/internal/account"
 	"cliro-go/internal/config"
@@ -135,6 +136,96 @@ func TestToggleProxyByStateChoosesStartOrStop(t *testing.T) {
 	}
 	if startCalls != 1 || stopCalls != 1 {
 		t.Fatalf("calls after stop path: start=%d stop=%d", startCalls, stopCalls)
+	}
+}
+
+func TestToggleAccount_DisableMarksDurableDisabled(t *testing.T) {
+	store, err := config.NewManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	now := time.Now().Unix()
+	accountData := config.Account{
+		ID:          "acct-disable",
+		Provider:    "codex",
+		Email:       "disable@example.com",
+		Enabled:     true,
+		HealthState: config.AccountHealthReady,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := store.UpsertAccount(accountData); err != nil {
+		t.Fatalf("upsert account: %v", err)
+	}
+
+	app := &App{store: store}
+	if err := app.ToggleAccount(accountData.ID, false); err != nil {
+		t.Fatalf("ToggleAccount(false): %v", err)
+	}
+
+	updated, ok := store.GetAccount(accountData.ID)
+	if !ok {
+		t.Fatalf("expected account to exist")
+	}
+	if updated.Enabled {
+		t.Fatalf("expected account to be disabled")
+	}
+	if updated.HealthState != config.AccountHealthDisabledDurable {
+		t.Fatalf("health state = %q, want %q", updated.HealthState, config.AccountHealthDisabledDurable)
+	}
+	if updated.HealthReason != "Disabled by user" {
+		t.Fatalf("health reason = %q, want Disabled by user", updated.HealthReason)
+	}
+}
+
+func TestToggleAccount_EnablePreservesQuotaCooldown(t *testing.T) {
+	store, err := config.NewManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("new manager: %v", err)
+	}
+
+	now := time.Now().Unix()
+	resetAt := now + 3600
+	accountData := config.Account{
+		ID:           "acct-cooldown",
+		Provider:     "codex",
+		Email:        "cooldown@example.com",
+		Enabled:      false,
+		HealthState:  config.AccountHealthDisabledDurable,
+		HealthReason: "Disabled by user",
+		Quota: config.QuotaInfo{
+			Status: "exhausted",
+			Buckets: []config.QuotaBucket{{
+				Name:    "session",
+				Status:  "exhausted",
+				ResetAt: resetAt,
+			}},
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := store.UpsertAccount(accountData); err != nil {
+		t.Fatalf("upsert account: %v", err)
+	}
+
+	app := &App{store: store}
+	if err := app.ToggleAccount(accountData.ID, true); err != nil {
+		t.Fatalf("ToggleAccount(true): %v", err)
+	}
+
+	updated, ok := store.GetAccount(accountData.ID)
+	if !ok {
+		t.Fatalf("expected account to exist")
+	}
+	if !updated.Enabled {
+		t.Fatalf("expected account to be enabled")
+	}
+	if updated.HealthState != config.AccountHealthCooldownQuota {
+		t.Fatalf("health state = %q, want %q", updated.HealthState, config.AccountHealthCooldownQuota)
+	}
+	if updated.CooldownUntil != resetAt {
+		t.Fatalf("cooldown_until = %d, want %d", updated.CooldownUntil, resetAt)
 	}
 }
 

@@ -283,6 +283,25 @@ func (s *Service) RefreshAccount(account config.Account, force bool) (config.Acc
 	if err != nil {
 		if blockedMsg, blocked := blockedAccountMessageFromAuthError(err); blocked {
 			_ = s.store.MarkAccountBanned(account.ID, blockedMsg)
+		} else if reloginMessage, refreshable := config.RefreshableAuthReason(err.Error()); refreshable {
+			now := time.Now().Unix()
+			_ = s.store.UpdateAccount(account.ID, func(a *config.Account) {
+				a.HealthState = config.AccountHealthCooldownTransient
+				a.HealthReason = "Need re-login"
+				a.CooldownUntil = now + int64((30*time.Second)/time.Second)
+				a.LastFailureAt = now
+				a.LastError = reloginMessage
+				a.Quota = config.QuotaInfo{
+					Status:        "unknown",
+					Summary:       "Authentication required",
+					Source:        "runtime",
+					Error:         reloginMessage,
+					LastCheckedAt: now,
+				}
+			})
+			if updated, ok := s.store.GetAccount(account.ID); ok {
+				account = updated
+			}
 		}
 		s.log.Error("auth", "kiro refresh failed for "+account.Email+": "+err.Error())
 		return account, err
@@ -610,4 +629,3 @@ func tokenExpired(account config.Account, now time.Time) bool {
 	}
 	return now.Unix() >= account.ExpiresAt
 }
-

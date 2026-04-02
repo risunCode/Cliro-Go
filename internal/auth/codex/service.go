@@ -1,6 +1,7 @@
 package codex
 
 import (
+	provider "cliro-go/internal/provider"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -177,6 +178,25 @@ func (s *Service) RefreshAccount(account config.Account, force bool) (config.Acc
 				a.BannedReason = blockedMsg
 				a.LastError = blockedMsg
 			})
+		} else if reloginMessage, refreshable := config.RefreshableAuthReason(err.Error()); refreshable {
+			now := time.Now().Unix()
+			_ = s.store.UpdateAccount(account.ID, func(a *config.Account) {
+				a.HealthState = config.AccountHealthCooldownTransient
+				a.HealthReason = "Need re-login"
+				a.CooldownUntil = now + int64((30*time.Second)/time.Second)
+				a.LastFailureAt = now
+				a.LastError = reloginMessage
+				a.Quota = config.QuotaInfo{
+					Status:        "unknown",
+					Summary:       "Authentication required",
+					Source:        "runtime",
+					Error:         reloginMessage,
+					LastCheckedAt: now,
+				}
+			})
+			if updated, ok := s.store.GetAccount(account.ID); ok {
+				account = updated
+			}
 		}
 		s.log.Error("auth", "refresh failed for "+account.Email+": "+err.Error())
 		return account, err
@@ -320,7 +340,7 @@ func (s *Service) refreshTokens(ctx context.Context, refreshToken string) (*Toke
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("refresh token failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return nil, fmt.Errorf("refresh token failed (%d): %s", resp.StatusCode, provider.CompactHTTPBody(data))
 	}
 
 	var parsed TokenExchangeResponse

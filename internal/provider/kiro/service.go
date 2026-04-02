@@ -252,16 +252,20 @@ func (s *Service) markSuccess(requestID string, accountID string, accountLabel s
 
 func (s *Service) markTransientFailure(requestID string, accountID string, accountLabel string, err error) {
 	now := time.Now().Unix()
+	detail := strings.TrimSpace(err.Error())
+	if detail == "" {
+		detail = "request failed"
+	}
 	appliedCooldown := time.Duration(0)
 	appliedFailures := 0
 	_ = s.store.UpdateAccount(accountID, func(account *config.Account) {
 		account.ErrorCount++
-		account.LastError = err.Error()
+		account.LastError = detail
 		account.LastFailureAt = now
 		account.Quota.Status = util.FirstNonEmpty(account.Quota.Status, "degraded")
-		account.Quota.Summary = err.Error()
+		account.Quota.Summary = "Request failed"
 		account.Quota.Source = util.FirstNonEmpty(account.Quota.Source, "runtime")
-		account.Quota.Error = err.Error()
+		account.Quota.Error = detail
 		account.Quota.LastCheckedAt = now
 		nextFailures := account.ConsecutiveFailures + 1
 		appliedCooldown = provider.TransientCooldown(nextFailures)
@@ -269,10 +273,10 @@ func (s *Service) markTransientFailure(requestID string, accountID string, accou
 		account.ConsecutiveFailures = nextFailures
 		account.CooldownUntil = now + int64(appliedCooldown/time.Second)
 		account.HealthState = config.AccountHealthCooldownTransient
-		account.HealthReason = err.Error()
+		account.HealthReason = detail
 	})
 	if appliedCooldown > 0 {
-		s.logProxyEvent("warn", "request.attempt_failed", requestID, logger.String("account", accountLabel), logger.String("reason", err.Error()), logger.Int("failure_count", appliedFailures), logger.Int("cooldown_seconds", int(appliedCooldown/time.Second)))
+		s.logProxyEvent("warn", "request.attempt_failed", requestID, logger.String("account", accountLabel), logger.String("reason", detail), logger.Int("failure_count", appliedFailures), logger.Int("cooldown_seconds", int(appliedCooldown/time.Second)))
 	}
 }
 
@@ -292,6 +296,24 @@ func (s *Service) applyFailureDecision(requestID string, accountID string, accou
 		}
 		_ = s.store.MarkAccountDurablyDisabled(accountID, decision.Message)
 		s.logAuthEvent("warn", "account.durable_disabled", requestID, logger.String("account", accountLabel), logger.String("reason", decision.Message))
+	case provider.FailureAuthRefreshable:
+		cooldownUntil := time.Now().Add(maxDuration(decision.Cooldown, 30*time.Second)).Unix()
+		_ = s.store.UpdateAccount(accountID, func(account *config.Account) {
+			account.ErrorCount++
+			account.CooldownUntil = cooldownUntil
+			account.HealthState = config.AccountHealthCooldownTransient
+			account.HealthReason = "Need re-login"
+			account.LastFailureAt = time.Now().Unix()
+			account.LastError = decision.Message
+			account.Quota = config.QuotaInfo{
+				Status:        "unknown",
+				Summary:       "Authentication required",
+				Source:        "runtime",
+				Error:         decision.Message,
+				LastCheckedAt: time.Now().Unix(),
+			}
+		})
+		s.logAuthEvent("warn", "auth.relogin_required", requestID, logger.String("account", accountLabel), logger.String("reason", decision.Message))
 	case provider.FailureQuotaCooldown:
 		cooldownUntil := time.Now().Add(decision.Cooldown).Unix()
 		_ = s.store.UpdateAccount(accountID, func(account *config.Account) {
@@ -303,7 +325,7 @@ func (s *Service) applyFailureDecision(requestID string, accountID string, accou
 			account.LastError = decision.Message
 			account.Quota = config.QuotaInfo{
 				Status:        "exhausted",
-				Summary:       decision.Message,
+				Summary:       "Quota exhausted",
 				Source:        "runtime",
 				Error:         decision.Message,
 				LastCheckedAt: time.Now().Unix(),
@@ -314,6 +336,16 @@ func (s *Service) applyFailureDecision(requestID string, accountID string, accou
 	default:
 		s.markTransientFailure(requestID, accountID, accountLabel, fmt.Errorf(decision.Message))
 	}
+}
+
+func maxDuration(current time.Duration, fallback time.Duration) time.Duration {
+	if current > 0 {
+		return current
+	}
+	if fallback > 0 {
+		return fallback
+	}
+	return 0
 }
 
 func (s *Service) logProxyEvent(level string, event string, requestID string, fields ...logger.Field) {

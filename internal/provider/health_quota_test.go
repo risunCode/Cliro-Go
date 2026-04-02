@@ -76,4 +76,7 @@ func TestCompactHTTPBody(t *testing.T) {
 	if got := CompactHTTPBody([]byte(" body ")); got != "body" {
 		t.Fatalf("trimmed body = %q", got)
 	}
+	if got := CompactHTTPBody([]byte(`{"error":{"message":"Your refresh token has already been used to generate a new access token.","code":"refresh_token_reused"}}`)); got != "refresh_token_reused: Your refresh token has already been used to generate a new access token." {
+		t.Fatalf("json body = %q", got)
+	}
 }

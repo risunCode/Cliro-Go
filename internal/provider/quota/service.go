@@ -52,6 +52,9 @@ func (s *Service) RefreshAccountWithQuota(accountID string) (config.Account, err
 
 	refreshed, err := s.auth.RefreshAccount(accountID)
 	if err != nil {
+		if updated, ok := s.store.GetAccount(accountID); ok {
+			return updated, err
+		}
 		return refreshed, err
 	}
 	account = refreshed
@@ -80,9 +83,23 @@ func (s *Service) RefreshQuota(accountID string) (config.Account, error) {
 	fresh, err := s.auth.EnsureFreshAccount(accountID)
 	if err != nil {
 		quota := coreprovider.SynthesizeQuota(account, err)
+		authMessage, refreshableAuth := config.RefreshableAuthReason(err.Error())
+		if refreshableAuth {
+			quota.Status = "unknown"
+			quota.Summary = "Authentication required"
+			quota.Source = util.FirstNonEmpty(strings.TrimSpace(quota.Source), "runtime")
+			quota.Error = util.FirstNonEmpty(strings.TrimSpace(authMessage), strings.TrimSpace(quota.Error), strings.TrimSpace(err.Error()))
+		}
 		blockedMsg, blocked := blockedAccountMessageFromError(err)
 		_ = s.store.UpdateAccount(accountID, func(a *config.Account) {
-			a.Quota = quota
+			a.Quota = normalizeQuotaInfo(quota)
+			if refreshableAuth {
+				a.HealthState = config.AccountHealthCooldownTransient
+				a.HealthReason = "Need re-login"
+				a.CooldownUntil = time.Now().Add(30 * time.Second).Unix()
+				a.LastFailureAt = time.Now().Unix()
+				a.LastError = util.FirstNonEmpty(strings.TrimSpace(authMessage), strings.TrimSpace(err.Error()))
+			}
 			if blocked {
 				a.Enabled = false
 				a.Banned = true
@@ -118,6 +135,7 @@ func (s *Service) ForceRefreshAllQuotas() error {
 }
 
 func (s *Service) applyQuotaSnapshot(accountID string, quota config.QuotaInfo, resolvedEmail string) error {
+	quota = normalizeQuotaInfo(quota)
 	return s.store.UpdateAccount(accountID, func(a *config.Account) {
 		a.Quota = quota
 		if strings.TrimSpace(resolvedEmail) != "" {
@@ -133,6 +151,9 @@ func (s *Service) applyQuotaSnapshot(accountID string, quota config.QuotaInfo, r
 			return
 		}
 		if shouldApplyQuotaCooldown(quota) {
+			if !a.Enabled && a.HealthState == config.AccountHealthDisabledDurable {
+				return
+			}
 			cooldownUntil := config.QuotaResetAt(quota)
 			if cooldownUntil <= time.Now().Unix() {
 				cooldownUntil = time.Now().Add(time.Hour).Unix()
@@ -272,6 +293,13 @@ func validateQuotaProvider(account config.Account) error {
 }
 
 func blockedAccountMessageFromQuota(quota config.QuotaInfo) (string, bool) {
+	status := strings.ToLower(strings.TrimSpace(quota.Status))
+	switch status {
+	case "deactivated", "banned", "suspended", "disabled", "account_deactivated":
+		message := util.FirstNonEmpty(strings.TrimSpace(quota.Error), strings.TrimSpace(quota.Summary), "Account deactivated")
+		return message, true
+	}
+
 	sourceMessage := util.FirstNonEmpty(strings.TrimSpace(quota.Error), strings.TrimSpace(quota.Summary))
 	if sourceMessage == "" {
 		return "", false
@@ -324,6 +352,20 @@ func shouldSkipBatchQuotaRefresh(account config.Account, now int64) (bool, strin
 	return false, ""
 }
 
+func normalizeQuotaInfo(quota config.QuotaInfo) config.QuotaInfo {
+	quota.Summary = strings.TrimSpace(quota.Summary)
+	quota.Error = strings.TrimSpace(quota.Error)
+
+	if quota.Summary == "" && quota.Error != "" {
+		quota.Summary = quota.Error
+	}
+
+	if quota.Summary != "" && strings.EqualFold(quota.Summary, quota.Error) {
+		quota.Error = ""
+	}
+
+	return quota
+}
 
 func maxInt(a, b int) int {
 	if a > b {

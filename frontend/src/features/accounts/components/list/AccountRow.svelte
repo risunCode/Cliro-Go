@@ -34,6 +34,9 @@ export let deleteInProgress = false
   $: metrics = presentation.metrics
   $: metricsWithReset = presentation.metricsWithReset
   $: quotaStatus = presentation.quotaStatus
+  $: quotaDisplayMode = presentation.quotaDisplayMode
+  $: disabledHint = presentation.disabledHint
+  $: quotaHint = presentation.quotaHint
 </script>
 
 <tr class={`table-row ${selected ? 'is-selected' : ''}`}>
@@ -45,10 +48,10 @@ export let deleteInProgress = false
     <div class="table-account">
       <p class="table-account-name">{presentation.displayName}</p>
       <p class="table-account-sub">{account.planType || 'plan-unknown'}</p>
-      {#if account.banned && account.bannedReason}
+      {#if quotaDisplayMode === 'metrics' && account.banned && account.bannedReason}
         <p class="table-error">{account.bannedReason}</p>
       {/if}
-      {#if account.lastError && account.lastError !== account.bannedReason}
+      {#if quotaDisplayMode === 'metrics' && account.lastError && account.lastError !== account.bannedReason}
         <p class="table-error">{account.lastError}</p>
       {/if}
     </div>
@@ -86,21 +89,53 @@ export let deleteInProgress = false
         <span class={`status-pill quota-${quotaStatus}`}>{quotaStatusLabel(quotaStatus)}</span>
       </div>
       <div class="table-metrics">
-        {#each metrics as metric}
-          {@const percent = metricPercent(metric)}
-          {@const tone = getPercentColor(percent)}
-          <div class={`table-metric table-metric-${tone}`}>
-            <div class="table-metric-head">
-              <span>{formatBucketLabel(metric.name)}</span>
-              <span>{percent.toFixed(0)}%</span>
+        {#if !account.enabled && disabledHint}
+          <div class={`table-metric table-metric-status table-metric-status-${disabledHint.tone}`}>
+            <div class="table-metric-status-head">
+              <div class="table-metric-hint">
+                <span class={`metric-hint-pill tone-${disabledHint.tone}`}>{disabledHint.text}</span>
+              </div>
+              {#if disabledHint.metaPillText}
+                <span class={`metric-meta-pill tone-${disabledHint.metaPillTone || 'neutral'}`}>{disabledHint.metaPillText}</span>
+              {:else if disabledHint.resetText}
+                <span class="table-metric-status-reset">{disabledHint.resetText}</span>
+              {/if}
             </div>
-            <div class="table-progress">
-              <span style={`width:${percent}%`}></span>
+            {#if disabledHint.detail}
+              <div class="table-metric-status-detail">{disabledHint.detail}</div>
+            {/if}
+          </div>
+        {:else if quotaDisplayMode === 'status' && quotaHint}
+          <div class={`table-metric table-metric-status table-metric-status-${quotaHint.tone}`}>
+            <div class="table-metric-status-head">
+              <div class="table-metric-hint">
+                <span class={`metric-hint-pill tone-${quotaHint.tone}`}>{quotaHint.text}</span>
+              </div>
+              {#if quotaHint.resetText}
+                <span class="table-metric-status-reset">{quotaHint.resetText}</span>
+              {/if}
             </div>
+            {#if quotaHint.detail}
+              <div class="table-metric-status-detail">{quotaHint.detail}</div>
+            {/if}
           </div>
         {:else}
-          <span class="reset-none">No quota data</span>
-        {/each}
+          {#each metrics as metric}
+            {@const percent = metricPercent(metric)}
+            {@const tone = getPercentColor(percent)}
+            <div class={`table-metric table-metric-${tone}`}>
+              <div class="table-metric-head">
+                <span>{formatBucketLabel(metric.name)}</span>
+                <span>{percent.toFixed(0)}%</span>
+              </div>
+              <div class="table-progress">
+                <span style={`width:${percent}%`}></span>
+              </div>
+            </div>
+          {:else}
+            <span class="reset-none">No quota data</span>
+          {/each}
+        {/if}
       </div>
     </div>
   </td>

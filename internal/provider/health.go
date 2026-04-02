@@ -2,6 +2,7 @@ package provider
 
 import (
 	"cliro-go/internal/util"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -181,10 +182,79 @@ func CompactHTTPBody(body []byte) string {
 	if trimmed == "" {
 		return "empty response"
 	}
+	if parsed := parseCompactHTTPJSON(trimmed); parsed != "" {
+		return parsed
+	}
 	if len(trimmed) > 180 {
 		return trimmed[:180] + "..."
 	}
 	return trimmed
+}
+
+func parseCompactHTTPJSON(raw string) string {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return ""
+	}
+
+	message, code := extractCompactHTTPFields(payload)
+	if message == "" {
+		return ""
+	}
+	if code == "" {
+		return message
+	}
+	return code + ": " + message
+}
+
+func extractCompactHTTPFields(payload map[string]any) (string, string) {
+	if payload == nil {
+		return "", ""
+	}
+
+	message := strings.TrimSpace(extractStringValue(payload, "message", "error_description", "detail", "title"))
+	code := normalizeCompactCode(extractStringValue(payload, "code", "error_code", "reason"))
+
+	if nested, ok := payload["error"].(map[string]any); ok {
+		nestedMessage, nestedCode := extractCompactHTTPFields(nested)
+		if message == "" {
+			message = nestedMessage
+		}
+		if code == "" {
+			code = nestedCode
+		}
+	}
+
+	if message != "" && len(message) > 180 {
+		message = message[:180] + "..."
+	}
+
+	return message, code
+}
+
+func extractStringValue(payload map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := payload[key]; ok {
+			if text, ok := value.(string); ok {
+				if trimmed := strings.TrimSpace(text); trimmed != "" {
+					return trimmed
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func normalizeCompactCode(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	if normalized == "" {
+		return ""
+	}
+	normalized = strings.NewReplacer("-", "_", " ", "_").Replace(normalized)
+	for strings.Contains(normalized, "__") {
+		normalized = strings.ReplaceAll(normalized, "__", "_")
+	}
+	return normalized
 }
 
 func isRetryableHTTPStatus(status int) bool {
@@ -218,7 +288,6 @@ func isRequestShapeFailure(status int, lowerMessage string) bool {
 	}
 	return false
 }
-
 
 func maxInt(a, b int) int {
 	if a > b {

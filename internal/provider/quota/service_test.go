@@ -27,6 +27,9 @@ const (
 type mockTransport struct {
 	mu                sync.Mutex
 	oauthCalls        int
+	oauthStatus       int
+	oauthErrorCode    string
+	oauthErrorMessage string
 	kiroTokenCalls    int
 	quotaCalls        int
 	kiroQuotaCalls    int
@@ -48,7 +51,27 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	case testOAuthTokenURL:
 		m.mu.Lock()
 		m.oauthCalls++
+		oauthStatus := m.oauthStatus
+		oauthErrorCode := m.oauthErrorCode
+		oauthErrorMessage := m.oauthErrorMessage
 		m.mu.Unlock()
+		if oauthStatus >= 400 {
+			message := strings.TrimSpace(oauthErrorMessage)
+			if message == "" {
+				message = "Your refresh token has already been used to generate a new access token. Please try signing in again."
+			}
+			code := strings.TrimSpace(oauthErrorCode)
+			if code == "" {
+				code = "refresh_token_reused"
+			}
+			return jsonResponse(oauthStatus, map[string]any{
+				"error": map[string]any{
+					"message": message,
+					"code":    code,
+					"type":    "invalid_request_error",
+				},
+			}), nil
+		}
 		return jsonResponse(http.StatusOK, map[string]any{
 			"access_token":  m.accessToken,
 			"refresh_token": m.refreshToken,
@@ -220,6 +243,110 @@ func TestRefreshQuota_KiroRefreshesTokenAndResolvesEmail(t *testing.T) {
 	}
 	if updated.Quota.Source != "kiro/getUsageLimits" {
 		t.Fatalf("expected kiro quota source, got %q", updated.Quota.Source)
+	}
+}
+
+func TestRefreshAccountWithQuota_RefreshErrorMarksNeedRelogin(t *testing.T) {
+	now := time.Now().Unix()
+	store, _, service := newTestService(t, &mockTransport{
+		oauthStatus:       http.StatusUnauthorized,
+		oauthErrorCode:    "refresh_token_reused",
+		oauthErrorMessage: "Your refresh token has already been used to generate a new access token. Please try signing in again.",
+	})
+
+	account := config.Account{
+		ID:           "acct-codex-refresh-failed",
+		Provider:     "codex",
+		Email:        "retry@example.com",
+		AccessToken:  "access-old",
+		RefreshToken: "refresh-old",
+		IDToken:      buildTestIDToken(now-60, "retry@example.com", "acct-retry", "plus"),
+		ExpiresAt:    now - 60,
+		Enabled:      true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.UpsertAccount(account); err != nil {
+		t.Fatalf("upsert account: %v", err)
+	}
+
+	updated, err := service.RefreshAccountWithQuota(account.ID)
+	if err == nil {
+		t.Fatalf("expected refresh failure")
+	}
+
+	if updated.HealthState != config.AccountHealthCooldownTransient {
+		t.Fatalf("health state = %q, want %q", updated.HealthState, config.AccountHealthCooldownTransient)
+	}
+	if updated.HealthReason != "Need re-login" {
+		t.Fatalf("health reason = %q, want Need re-login", updated.HealthReason)
+	}
+	if updated.Quota.Status != "unknown" {
+		t.Fatalf("quota status = %q, want unknown", updated.Quota.Status)
+	}
+	if updated.Quota.Summary != "Authentication required" {
+		t.Fatalf("quota summary = %q, want Authentication required", updated.Quota.Summary)
+	}
+	if !strings.Contains(strings.ToLower(updated.Quota.Error), "refresh token") {
+		t.Fatalf("quota error = %q, expected refresh token detail", updated.Quota.Error)
+	}
+}
+
+func TestApplyQuotaSnapshot_KeepsManualDisabledAccountOff(t *testing.T) {
+	now := time.Now().Unix()
+	store, _, service := newTestService(t, &mockTransport{})
+
+	account := config.Account{
+		ID:           "acct-manual-disabled",
+		Provider:     "codex",
+		Email:        "manual@example.com",
+		Enabled:      false,
+		HealthState:  config.AccountHealthDisabledDurable,
+		HealthReason: "Disabled by user",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.UpsertAccount(account); err != nil {
+		t.Fatalf("upsert account: %v", err)
+	}
+
+	quota := config.QuotaInfo{
+		Status:        "exhausted",
+		Summary:       "Quota exhausted",
+		LastCheckedAt: now,
+		Buckets: []config.QuotaBucket{{
+			Name:    "session",
+			Status:  "exhausted",
+			ResetAt: now + 7200,
+		}},
+	}
+
+	if err := service.applyQuotaSnapshot(account.ID, quota, ""); err != nil {
+		t.Fatalf("applyQuotaSnapshot: %v", err)
+	}
+
+	updated, ok := store.GetAccount(account.ID)
+	if !ok {
+		t.Fatalf("expected account to exist")
+	}
+	if updated.Enabled {
+		t.Fatalf("expected manually disabled account to stay disabled")
+	}
+	if updated.HealthState != config.AccountHealthDisabledDurable {
+		t.Fatalf("health state = %q, want %q", updated.HealthState, config.AccountHealthDisabledDurable)
+	}
+}
+
+func TestBlockedAccountMessageFromQuota_DetectsDeactivatedStatus(t *testing.T) {
+	message, blocked := blockedAccountMessageFromQuota(config.QuotaInfo{
+		Status:  "deactivated",
+		Summary: "Your OpenAI account has been deactivated.",
+	})
+	if !blocked {
+		t.Fatalf("expected blocked=true for deactivated quota status")
+	}
+	if message != "Your OpenAI account has been deactivated." {
+		t.Fatalf("message = %q", message)
 	}
 }
 

@@ -56,16 +56,22 @@ export const getPercentColor = (percent: number): 'success' | 'warning' | 'dange
 }
 
 export const formatMetricValue = (bucket: QuotaBucket): string => {
+  const remaining = Number(bucket.remaining ?? 0)
   const used = Number(bucket.used ?? 0)
   const total = Number(bucket.total ?? 0)
+  const safeRemaining = Number.isFinite(remaining) ? Math.max(remaining, 0) : 0
   const safeUsed = Number.isFinite(used) ? used : 0
   const safeTotal = Number.isFinite(total) ? total : 0
 
   if (safeTotal <= 0) {
-    return `${formatNumber(safeUsed)} / -`
+    return `${formatNumber(safeRemaining)} / -`
   }
 
-  return `${formatNumber(safeUsed)} / ${formatNumber(safeTotal)}`
+  if (safeRemaining > 0 || safeUsed === 0) {
+    return `${formatNumber(safeRemaining)} / ${formatNumber(safeTotal)}`
+  }
+
+  return `${formatNumber(Math.max(safeTotal-safeUsed, 0))} / ${formatNumber(safeTotal)}`
 }
 
 export const formatRelativeReset = (resetAt?: number): string => {
@@ -149,10 +155,44 @@ export const formatBucketLabel = (name?: string): string => {
     return 'Quota'
   }
 
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
+  if (
+    normalized === 'free_trial' ||
+    normalized === 'trial_credits' ||
+    normalized === 'free_trial_credits' ||
+    normalized === 'credit_freetrial' ||
+    normalized === 'credit_free_trial' ||
+    normalized === 'credits_freetrial' ||
+    normalized === 'credits_free_trial'
+  ) {
+    return 'Free Trial Credits'
+  }
+
+  if (normalized === 'credits' || normalized === 'credit') {
+    return 'Credits'
+  }
+
   return name
     .replace(/[_-]+/g, ' ')
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+export const formatResetHint = (resetAt?: number): string => {
+  const relative = formatRelativeReset(resetAt)
+  if (!relative) {
+    return ''
+  }
+
+  if (relative === 'Expired') {
+    return 'Reset expired'
+  }
+
+  return `Resets ${relative}`
 }
 
 export const formatQuotaDateTime = (unixSeconds?: number): string => {

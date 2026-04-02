@@ -80,6 +80,9 @@
   $: nearestResetAt = getNearestFutureResetAt(account?.quota, account?.cooldownUntil)
   $: resetCountdown = formatRelativeReset(nearestResetAt) || '-'
   $: resetDateTime = formatUnixSeconds(nearestResetAt)
+  $: quotaSummary = normalizeValue(account?.quota?.summary) || 'No quota summary available.'
+  $: quotaError = normalizeValue(account?.lastError)
+  $: showQuotaError = quotaError !== '' && quotaError !== quotaSummary
   $: if (!open) {
     copiedField = ''
     revealSecrets = false
@@ -141,15 +144,15 @@
         </div>
         <div class="rounded-sm border border-border bg-app p-2 sm:col-span-2 flex min-h-[11rem] flex-col">
           <p class="mb-1 text-[11px] uppercase tracking-[0.06em] text-text-secondary">Quota Status & Last Error</p>
-          <div class="mb-1 flex items-center gap-2">
+          <div class="mb-1 flex flex-wrap items-center gap-2">
             <StatusBadge tone={getQuotaTone(account.quota?.status)}>{account.quota?.status || 'unknown'}</StatusBadge>
             {#if isBanned}
               <StatusBadge tone="error">Banned</StatusBadge>
             {/if}
-            <p class="text-xs text-text-secondary break-words">{account.quota?.summary || 'No quota summary available.'}</p>
           </div>
-          <p class="break-words font-medium {account.lastError ? 'text-error' : 'text-text-primary'}">
-            {account.lastError || 'No recent errors.'}
+          <p class="break-words text-xs text-text-secondary">{quotaSummary}</p>
+          <p class="mt-1 break-words font-medium {showQuotaError ? 'text-error' : 'text-text-primary'}">
+            {showQuotaError ? quotaError : 'No recent errors.'}
           </p>
         </div>
       </div>

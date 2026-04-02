@@ -496,9 +496,78 @@ func (a *App) DeleteAccount(accountID string) error {
 }
 
 func (a *App) ToggleAccount(accountID string, enabled bool) error {
+	now := time.Now().Unix()
 	return a.store.UpdateAccount(accountID, func(account *config.Account) {
+		previousState := account.HealthState
 		account.Enabled = enabled
+
+		if !enabled {
+			if account.Banned || account.HealthState == config.AccountHealthBanned {
+				return
+			}
+			account.HealthState = config.AccountHealthDisabledDurable
+			account.HealthReason = "Disabled by user"
+			account.CooldownUntil = 0
+			account.ConsecutiveFailures = 0
+			return
+		}
+
+		if account.Banned || account.HealthState == config.AccountHealthBanned {
+			account.HealthState = config.AccountHealthBanned
+			account.HealthReason = strings.TrimSpace(account.BannedReason)
+			return
+		}
+
+		if shouldApplyQuotaCooldownToAccount(*account, now) {
+			resetAt := account.CooldownUntil
+			if quotaReset := config.QuotaResetAt(account.Quota); quotaReset > resetAt {
+				resetAt = quotaReset
+			}
+			if resetAt > now {
+				account.CooldownUntil = resetAt
+			}
+			account.HealthState = config.AccountHealthCooldownQuota
+			if strings.TrimSpace(account.HealthReason) == "" {
+				account.HealthReason = firstNonEmptyMessage(strings.TrimSpace(account.Quota.Summary), strings.TrimSpace(account.LastError), "Quota exhausted")
+			}
+			return
+		}
+
+		account.CooldownUntil = 0
+		account.ConsecutiveFailures = 0
+		account.HealthState = config.AccountHealthReady
+		if previousState == config.AccountHealthDisabledDurable || strings.EqualFold(strings.TrimSpace(account.HealthReason), "disabled by user") {
+			account.HealthReason = ""
+			return
+		}
+		account.HealthReason = ""
 	})
+}
+
+func shouldApplyQuotaCooldownToAccount(account config.Account, now int64) bool {
+	if account.HealthState == config.AccountHealthCooldownQuota && account.CooldownUntil > now {
+		return true
+	}
+
+	status := strings.ToLower(strings.TrimSpace(account.Quota.Status))
+	if status != "exhausted" && status != "empty" {
+		return false
+	}
+
+	if account.CooldownUntil > now {
+		return true
+	}
+
+	return config.QuotaResetAt(account.Quota) > now
+}
+
+func firstNonEmptyMessage(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func (a *App) ImportAccounts(accounts []config.Account) (int, error) {
