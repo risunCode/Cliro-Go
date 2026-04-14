@@ -2,7 +2,7 @@
 
 CLIRO is a Wails desktop control plane for running a local OpenAI-compatible proxy across ChatGPT Codex and Kiro accounts. CLIRO stands for CLIrouter.
 
-Current release: **v0.3.1**
+Current release: **v0.3.2**
 
 ## Screenshot
 
