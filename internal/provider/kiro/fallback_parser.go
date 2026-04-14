@@ -38,7 +38,7 @@ func (p *assistantFallbackParser) Enabled() bool {
 
 func (p *assistantFallbackParser) Feed(delta string) []StreamEvent {
 	if p == nil || delta == "" {
-		if strings.TrimSpace(delta) == "" {
+		if delta == "" {
 			return nil
 		}
 		return []StreamEvent{{Text: delta}}
@@ -74,7 +74,6 @@ func (p *assistantFallbackParser) drain(final bool) []StreamEvent {
 	}
 	events := make([]StreamEvent, 0)
 	appendText := func(text string) {
-		text = sanitizeModelOutputText(text)
 		if text == "" {
 			return
 		}

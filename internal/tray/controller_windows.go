@@ -105,6 +105,8 @@ func (c *windowsController) onReady() {
 	systray.AddSeparator()
 	c.exitItem = systray.AddMenuItem("Exit App", "Exit CLIRO")
 	c.available = true
+
+	// Capture channels while holding lock to prevent race
 	openCh := c.openItem.ClickedCh
 	toggleCh := c.toggleProxyItem.ClickedCh
 	exitCh := c.exitItem.ClickedCh

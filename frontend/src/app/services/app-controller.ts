@@ -806,10 +806,10 @@ export function createAppController(): AppController {
     await withAccountBusy(accountId, async () => {
       await runAppAction({
         action: () => accountsApi.runAccountAction({ accountId, action: 'refresh-with-quota' }),
-        successToast: {
-          title: 'Account Refreshed',
-          message: 'Quota checked. Token refreshed only when expired.'
-        },
+           successToast: {
+             title: 'Account Refreshed',
+             message: 'Token and quota refreshed successfully.'
+   },
         errorTitle: 'Refresh Account Failed'
       })
 

@@ -16,6 +16,15 @@ export interface TesterStructuredResponse {
   message: string
 }
 
+const ENVIRONMENT_DETAILS_BLOCK = /<environment_details>[\s\S]*?<\/environment_details>/gi
+
+const sanitizeVisibleResponseText = (value: string): string => {
+  if (!value) {
+    return ''
+  }
+  return value.replace(ENVIRONMENT_DETAILS_BLOCK, '').trim()
+}
+
 export const ENDPOINT_PRESETS: EndpointPreset[] = [
   { id: 'health', label: 'GET /health', method: 'GET', path: '/health', defaultBody: '' },
   { id: 'models', label: 'GET /v1/models', method: 'GET', path: '/v1/models', defaultBody: '' },
@@ -123,8 +132,8 @@ export const buildTesterStructuredResponse = (payload: string): TesterStructured
 export const extractStructuredResponseFromJSON = (payload: Record<string, unknown>): TesterStructuredResponse | null => {
   const blocks = extractMessageBlocks(payload)
   if (blocks.length > 0) {
-    const thinking = blocks.filter((block) => block.kind === 'thinking').map((block) => block.content).join('\n\n').trim()
-    const message = blocks.filter((block) => block.kind === 'text').map((block) => block.content).join('\n\n').trim()
+    const thinking = sanitizeVisibleResponseText(blocks.filter((block) => block.kind === 'thinking').map((block) => block.content).join('\n\n'))
+    const message = sanitizeVisibleResponseText(blocks.filter((block) => block.kind === 'text').map((block) => block.content).join('\n\n'))
     if (!thinking && !message) {
       return null
     }
@@ -156,7 +165,7 @@ export const extractStructuredResponseFromSSE = (payload: string): TesterStructu
       if (line.startsWith('event:')) {
         eventName = line.slice(6).trim()
       } else if (line.startsWith('data:')) {
-        dataLines.push(line.slice(5).trim())
+        dataLines.push(line.slice(5).replace(/^ /, ''))
       }
     }
     if (dataLines.length === 0) {
@@ -199,7 +208,7 @@ export const extractStructuredResponseFromSSE = (payload: string): TesterStructu
         case 'response.output_text.done':
           thinking += extractOpenAIReasoning(parsed)
           if (!message) {
-            message = String(parsed.text || '').trim()
+            message = String(parsed.text || '')
           }
           break
         case 'response.completed': {
@@ -207,10 +216,10 @@ export const extractStructuredResponseFromSSE = (payload: string): TesterStructu
           if (response && typeof response === 'object') {
             const responseRecord = response as Record<string, unknown>
             if (!thinking) {
-              thinking = extractOpenAIReasoning(responseRecord).trim()
+              thinking = extractOpenAIReasoning(responseRecord)
             }
             if (!message) {
-              message = String(responseRecord.output_text || '').trim()
+              message = String(responseRecord.output_text || '')
             }
           }
           break
@@ -234,8 +243,8 @@ export const extractStructuredResponseFromSSE = (payload: string): TesterStructu
     }
   }
 
-  const normalizedThinking = thinking.trim()
-  const normalizedMessage = message.trim()
+  const normalizedThinking = sanitizeVisibleResponseText(thinking)
+  const normalizedMessage = sanitizeVisibleResponseText(message)
   if (!normalizedThinking && !normalizedMessage) {
     return null
   }
@@ -282,8 +291,8 @@ export const extractStructuredResponseFromOpenAIJSON = (payload: Record<string, 
     }
   }
 
-  const normalizedThinking = thinking.trim()
-  const normalizedMessage = message.trim()
+  const normalizedThinking = sanitizeVisibleResponseText(thinking)
+  const normalizedMessage = sanitizeVisibleResponseText(message)
   if (!normalizedThinking && !normalizedMessage) {
     return null
   }
@@ -303,7 +312,7 @@ export const extractOpenAIReasoning = (payload: Record<string, unknown>): string
 export const extractOpenAIMessageContent = (payload: Record<string, unknown>): string => {
   const content = payload.content
   if (typeof content === 'string') {
-    return content.trim()
+    return sanitizeVisibleResponseText(content)
   }
   if (!Array.isArray(content)) {
     return ''
@@ -316,10 +325,10 @@ export const extractOpenAIMessageContent = (payload: Record<string, unknown>): s
     }
     const record = item as Record<string, unknown>
     if (typeof record.text === 'string' && record.text.trim()) {
-      parts.push(record.text.trim())
+      parts.push(record.text)
     }
   }
-  return parts.join('\n\n').trim()
+  return sanitizeVisibleResponseText(parts.join(''))
 }
 
 export const extractMessageBlocks = (payload: Record<string, unknown>): TesterRenderedBlock[] => {
@@ -336,14 +345,14 @@ export const extractMessageBlocks = (payload: Record<string, unknown>): TesterRe
     const record = item as Record<string, unknown>
     const type = String(record.type || '').trim()
     if (type === 'thinking') {
-      const thinking = String(record.thinking || '').trim()
+      const thinking = sanitizeVisibleResponseText(String(record.thinking || ''))
       if (thinking) {
         blocks.push({ kind: 'thinking', content: thinking })
       }
       continue
     }
     if (type === 'text') {
-      const text = String(record.text || '').trim()
+      const text = sanitizeVisibleResponseText(String(record.text || ''))
       if (text) {
         blocks.push({ kind: 'text', content: text })
       }

@@ -17,6 +17,13 @@ type normalizedMessage struct {
 
 var internalMetadataBlockPattern = regexp.MustCompile(`(?is)<environment_details>.*?</environment_details>`)
 
+func appendVisibleFragment(parts []string, fragment string) []string {
+	if strings.TrimSpace(fragment) == "" {
+		return parts
+	}
+	return append(parts, fragment)
+}
+
 func normalizeRequest(req provider.ChatRequest) ([]normalizedMessage, string, error) {
 	messages := toNormalizedMessages(req.Messages)
 	systemPrompt, messages := splitLeadingSystemPrompt(messages)
@@ -216,7 +223,6 @@ func removeEmptyUserMessages(messages []normalizedMessage) []normalizedMessage {
 	return result
 }
 
-
 func ensureEndsWithUserMessage(messages []normalizedMessage) []normalizedMessage {
 	if len(messages) == 0 {
 		return messages
@@ -259,7 +265,6 @@ func ensureAlternatingRoles(messages []normalizedMessage) []normalizedMessage {
 	}
 	return result
 }
-
 
 func extractToolUses(message provider.Message) []toolUsePayload {
 	toolUses := make([]toolUsePayload, 0, len(message.ToolCalls))
@@ -334,33 +339,31 @@ func messageTextContent(content any) string {
 		for _, item := range typed {
 			block, ok := item.(map[string]any)
 			if !ok {
-				if text := strings.TrimSpace(messageTextContent(item)); text != "" {
-					parts = append(parts, text)
-				}
+				parts = appendVisibleFragment(parts, messageTextContent(item))
 				continue
 			}
 			switch strings.ToLower(strings.TrimSpace(asString(block["type"]))) {
 			case "text", "input_text", "output_text":
-				if text := strings.TrimSpace(asString(block["text"])); text != "" {
+				if text := asString(block["text"]); strings.TrimSpace(text) != "" {
 					parts = append(parts, text)
 				}
 			case "refusal":
-				if text := strings.TrimSpace(asString(block["refusal"])); text != "" {
+				if text := asString(block["refusal"]); strings.TrimSpace(text) != "" {
 					parts = append(parts, text)
 				}
 			case "thinking":
-				if text := strings.TrimSpace(asString(block["thinking"])); text != "" {
+				if text := asString(block["thinking"]); strings.TrimSpace(text) != "" {
 					parts = append(parts, text)
 				}
 			case "tool_use", "tool_result", "image", "image_url":
 				continue
 			default:
-				if text := strings.TrimSpace(asString(block["text"])); text != "" {
+				if text := asString(block["text"]); strings.TrimSpace(text) != "" {
 					parts = append(parts, text)
 				}
 			}
 		}
-		return strings.TrimSpace(strings.Join(parts, "\n"))
+		return strings.TrimSpace(strings.Join(parts, ""))
 	case map[string]any:
 		if text := strings.TrimSpace(asString(typed["text"])); text != "" {
 			return text
@@ -416,6 +419,13 @@ func sanitizeModelOutputText(text string) string {
 	return collapseBlankLines(stripInternalMetadataBlocks(text))
 }
 
+func sanitizeModelOutputDelta(text string) string {
+	if text == "" {
+		return ""
+	}
+	return internalMetadataBlockPattern.ReplaceAllString(text, "")
+}
+
 func stripInternalMetadataBlocks(text string) string {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -441,25 +451,23 @@ func collapseBlankLines(text string) string {
 	var b strings.Builder
 	b.Grow(len(trimmed))
 	blankPending := false
-	hasContent := false
 	start := 0
 	for i := 0; i <= len(trimmed); i++ {
 		if i == len(trimmed) || trimmed[i] == '\n' {
 			line := strings.TrimRight(trimmed[start:i], " \t\r")
 			if strings.TrimSpace(line) == "" {
-				if hasContent {
+				if b.Len() > 0 {
 					blankPending = true
 				}
 			} else {
-				if hasContent {
+				if b.Len() > 0 {
 					b.WriteByte('\n')
-				}
-				if blankPending {
-					b.WriteByte('\n')
-					blankPending = false
+					if blankPending {
+						b.WriteByte('\n')
+						blankPending = false
+					}
 				}
 				b.WriteString(line)
-				hasContent = true
 			}
 			start = i + 1
 		}
@@ -520,5 +528,3 @@ func defaultIfNilMap(value map[string]any) map[string]any {
 	}
 	return value
 }
-
-

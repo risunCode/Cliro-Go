@@ -9,7 +9,7 @@ This guide gives AI coding agents the current project scope, architecture, and w
 - **Backend**: Go 1.23+
 - **Frontend**: Svelte + TypeScript + Vite
 - **Desktop shell**: Wails v2.11+
-- **Current release**: **v0.3.1**
+- **Current release**: **v0.3.3**
 - **Main entry point**: `main.go`
 - **Wails app bridge**: `app.go`
 

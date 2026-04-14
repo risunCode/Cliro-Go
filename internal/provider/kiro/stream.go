@@ -8,6 +8,7 @@ import (
 	"hash/crc32"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"cliro/internal/config"
 	contract "cliro/internal/contract"
@@ -68,7 +69,11 @@ func collectCompletionWithTagsAndMapping(body io.Reader, req provider.ChatReques
 		mergeUsage(&outcome.Usage, event.Usage)
 
 		if callback != nil && (event.Text != "" || event.Thinking != "" || event.Usage.TotalTokens > 0) {
-			callback(event)
+			event.Text = sanitizeModelOutputDelta(event.Text)
+			event.Thinking = sanitizeModelOutputDelta(event.Thinking)
+			if event.Text != "" || event.Thinking != "" || event.Usage.TotalTokens > 0 || event.Usage.PromptTokens > 0 || event.Usage.CompletionTokens > 0 {
+				callback(event)
+			}
 		}
 	}
 
@@ -294,6 +299,7 @@ type StreamParser struct {
 	pendingEvents    []StreamEvent
 	finalized        bool
 	fallbackParser   *assistantFallbackParser
+	metadataFilter   *streamMetadataFilter
 }
 
 type eventFrame struct {
@@ -309,12 +315,97 @@ type toolAccumulator struct {
 	HasInput   bool
 }
 
+type streamMetadataFilter struct {
+	inMetadata bool
+	pending    string
+}
+
+func newStreamMetadataFilter() *streamMetadataFilter {
+	return &streamMetadataFilter{}
+}
+
+func (f *streamMetadataFilter) Feed(delta string) string {
+	if f == nil || delta == "" {
+		return delta
+	}
+	f.pending += delta
+	return f.drain(false)
+}
+
+func (f *streamMetadataFilter) Finalize() string {
+	if f == nil {
+		return ""
+	}
+	return f.drain(true)
+}
+
+func (f *streamMetadataFilter) drain(final bool) string {
+	if f == nil {
+		return ""
+	}
+	const openTag = "<environment_details>"
+	const closeTag = "</environment_details>"
+
+	var out strings.Builder
+	for {
+		if f.inMetadata {
+			idx := strings.Index(f.pending, closeTag)
+			if idx >= 0 {
+				f.pending = f.pending[idx+len(closeTag):]
+				f.inMetadata = false
+				continue
+			}
+			if final {
+				f.pending = ""
+			}
+			return out.String()
+		}
+
+		idx := strings.Index(f.pending, openTag)
+		if idx >= 0 {
+			out.WriteString(f.pending[:idx])
+			f.pending = f.pending[idx+len(openTag):]
+			f.inMetadata = true
+			continue
+		}
+
+		if final {
+			out.WriteString(f.pending)
+			f.pending = ""
+			return out.String()
+		}
+
+		safeLen := len(f.pending) - len(openTag) + 1
+		if safeLen > 0 {
+			safeLen = utf8SafePrefixLength(f.pending, safeLen)
+			if safeLen > 0 {
+				out.WriteString(f.pending[:safeLen])
+				f.pending = f.pending[safeLen:]
+			}
+		}
+		return out.String()
+	}
+}
+
+func utf8SafePrefixLength(text string, limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	if limit >= len(text) {
+		return len(text)
+	}
+	for limit > 0 && !utf8.ValidString(text[:limit]) {
+		limit--
+	}
+	return limit
+}
+
 func NewStreamParser(reader io.Reader) *StreamParser {
 	return NewStreamParserWithFallbackTags(reader, nil, false)
 }
 
 func NewStreamParserWithFallbackTags(reader io.Reader, fallbackTags []string, enableFallback bool) *StreamParser {
-	parser := &StreamParser{reader: reader}
+	parser := &StreamParser{reader: reader, metadataFilter: newStreamMetadataFilter()}
 	if enableFallback {
 		parser.fallbackParser = newAssistantFallbackParser(fallbackTags)
 	}
@@ -334,6 +425,11 @@ func (p *StreamParser) Next() (StreamEvent, error) {
 				if !p.finalized {
 					p.finalized = true
 					p.finalizeCurrentTool()
+					if p.metadataFilter != nil {
+						if flushed := p.metadataFilter.Finalize(); flushed != "" {
+							p.pendingEvents = append(p.pendingEvents, p.emitAssistantResponseDelta(flushed)...)
+						}
+					}
 					if p.fallbackParser != nil {
 						p.pendingEvents = append(p.pendingEvents, p.fallbackParser.Finalize()...)
 					}
@@ -390,7 +486,11 @@ func (p *StreamParser) parseFrame(frame eventFrame) ([]StreamEvent, error) {
 
 	switch resolveEventType(frame.EventType, payload) {
 	case "assistantResponseEvent":
-		return attachUsageEvents(p.emitAssistantResponseDelta(deltaFromCumulative(&p.assistantContent, resolveTextField(payload, "content", "text"))), usage), nil
+		delta := deltaFromCumulative(&p.assistantContent, resolveTextField(payload, "content", "text"))
+		if p.metadataFilter != nil {
+			delta = p.metadataFilter.Feed(delta)
+		}
+		return attachUsageEvents(p.emitAssistantResponseDelta(delta), usage), nil
 	case "reasoningContentEvent":
 		return attachUsageEvents(singleEvent(StreamEvent{Thinking: deltaFromCumulative(&p.thinkingContent, resolveTextField(payload, "text", "content"))}), usage), nil
 	case "toolUseEvent":
@@ -580,7 +680,7 @@ func resolveEventType(headerType string, payload map[string]any) string {
 
 func resolveTextField(payload map[string]any, keys ...string) string {
 	for _, key := range keys {
-		if text, ok := payload[key].(string); ok && strings.TrimSpace(text) != "" {
+		if text, ok := payload[key].(string); ok && text != "" {
 			return text
 		}
 	}
@@ -588,7 +688,7 @@ func resolveTextField(payload map[string]any, keys ...string) string {
 }
 
 func deltaFromCumulative(previous *string, current string) string {
-	if strings.TrimSpace(current) == "" {
+	if current == "" {
 		return ""
 	}
 	if previous == nil || *previous == "" {
@@ -601,27 +701,29 @@ func deltaFromCumulative(previous *string, current string) string {
 		return ""
 	}
 	if strings.HasPrefix(current, *previous) {
-		delta := current[len(*previous):]
+		delta := strings.TrimPrefix(current, *previous)
 		*previous = current
 		return delta
 	}
 	if strings.HasPrefix(*previous, current) {
 		return ""
 	}
+	previousRunes := []rune(*previous)
+	currentRunes := []rune(current)
 	maxOverlap := 0
-	maxLength := len(*previous)
-	if len(current) < maxLength {
-		maxLength = len(current)
+	maxLength := len(previousRunes)
+	if len(currentRunes) < maxLength {
+		maxLength = len(currentRunes)
 	}
 	for size := maxLength; size > 0; size-- {
-		if strings.HasSuffix(*previous, current[:size]) {
+		if string(previousRunes[len(previousRunes)-size:]) == string(currentRunes[:size]) {
 			maxOverlap = size
 			break
 		}
 	}
 	*previous = current
 	if maxOverlap > 0 {
-		return current[maxOverlap:]
+		return string(currentRunes[maxOverlap:])
 	}
 	return current
 }

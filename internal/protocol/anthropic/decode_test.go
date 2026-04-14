@@ -133,3 +133,23 @@ func TestMessagesToIR_ConvertsOrphanToolResultsIntoUserMessage(t *testing.T) {
 		t.Fatalf("content = %#v", request.Messages[1].Content)
 	}
 }
+
+func TestMessagesToIR_PreservesSplitTextSpacing(t *testing.T) {
+	request, err := MessagesToIR(MessagesRequest{
+		Model: "claude-sonnet-4.5",
+		Messages: []Message{{Role: "assistant", Content: []any{
+			map[string]any{"type": "text", "text": "Baik, saya akan cek struktur"},
+			map[string]any{"type": "text", "text": " modal dan layout"},
+			map[string]any{"type": "text", "text": " app shell."},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("MessagesToIR: %v", err)
+	}
+	if len(request.Messages) != 1 {
+		t.Fatalf("message count = %d", len(request.Messages))
+	}
+	if request.Messages[0].Content != "Baik, saya akan cek struktur modal dan layout app shell." {
+		t.Fatalf("assistant content = %#v", request.Messages[0].Content)
+	}
+}

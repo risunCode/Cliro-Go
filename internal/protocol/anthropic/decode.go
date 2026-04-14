@@ -234,6 +234,13 @@ func mergeMessageContent(current any, next any) any {
 	}
 }
 
+func appendVisibleTextFragment(parts []string, fragment string) []string {
+	if strings.TrimSpace(fragment) == "" {
+		return parts
+	}
+	return append(parts, fragment)
+}
+
 func messageContentToText(content any) string {
 	switch typed := content.(type) {
 	case nil:
@@ -243,12 +250,9 @@ func messageContentToText(content any) string {
 	case []any:
 		parts := make([]string, 0, len(typed))
 		for _, item := range typed {
-			text := strings.TrimSpace(messageContentToText(item))
-			if text != "" {
-				parts = append(parts, text)
-			}
+			parts = appendVisibleTextFragment(parts, messageContentToText(item))
 		}
-		return strings.TrimSpace(strings.Join(parts, "\n"))
+		return strings.TrimSpace(strings.Join(parts, ""))
 	case map[string]any:
 		if text, ok := typed["text"].(string); ok && strings.TrimSpace(text) != "" {
 			return strings.TrimSpace(text)
@@ -278,18 +282,15 @@ func convertAnthropicMessageContent(role string, content any) (string, []contrac
 			sanitized := stripAnthropicCacheControl(item)
 			block, ok := sanitized.(map[string]any)
 			if !ok {
-				fallback := strings.TrimSpace(anthropicContentToText(sanitized))
-				if fallback != "" {
-					textParts = append(textParts, fallback)
-				}
+				textParts = appendVisibleTextFragment(textParts, anthropicContentToText(sanitized))
 				continue
 			}
 
 			blockType, _ := block["type"].(string)
 			switch strings.ToLower(strings.TrimSpace(blockType)) {
 			case "text":
-				if text, ok := block["text"].(string); ok && strings.TrimSpace(text) != "" {
-					textParts = append(textParts, text)
+				if text, ok := block["text"].(string); ok {
+					textParts = appendVisibleTextFragment(textParts, text)
 				}
 			case "thinking":
 				if text, ok := block["thinking"].(string); ok && strings.TrimSpace(text) != "" {
@@ -343,14 +344,11 @@ func convertAnthropicMessageContent(role string, content any) (string, []contrac
 					Content:    toolContent,
 				})
 			default:
-				fallback := strings.TrimSpace(anthropicContentToText(block))
-				if fallback != "" {
-					textParts = append(textParts, fallback)
-				}
+				textParts = appendVisibleTextFragment(textParts, anthropicContentToText(block))
 			}
 		}
 
-		return strings.TrimSpace(strings.Join(textParts, "\n")), toolCalls, toolResults, thinkingBlocks
+		return strings.TrimSpace(strings.Join(textParts, "")), toolCalls, toolResults, thinkingBlocks
 	default:
 		return strings.TrimSpace(anthropicContentToText(stripAnthropicCacheControl(content))), nil, nil, nil
 	}
@@ -363,12 +361,9 @@ func anthropicSystemToText(system any) string {
 	case []any:
 		parts := make([]string, 0, len(typed))
 		for _, item := range typed {
-			text := strings.TrimSpace(anthropicContentToText(item))
-			if text != "" {
-				parts = append(parts, text)
-			}
+			parts = appendVisibleTextFragment(parts, anthropicContentToText(item))
 		}
-		return strings.TrimSpace(strings.Join(parts, "\n"))
+		return strings.TrimSpace(strings.Join(parts, ""))
 	default:
 		return strings.TrimSpace(anthropicContentToText(system))
 	}
@@ -388,13 +383,13 @@ func anthropicContentToText(content any) string {
 				blockType, _ := block["type"].(string)
 				switch strings.ToLower(strings.TrimSpace(blockType)) {
 				case "text":
-					if text, ok := block["text"].(string); ok && strings.TrimSpace(text) != "" {
-						parts = append(parts, text)
+					if text, ok := block["text"].(string); ok {
+						parts = appendVisibleTextFragment(parts, text)
 					}
 					continue
 				case "thinking":
-					if thinking, ok := block["thinking"].(string); ok && strings.TrimSpace(thinking) != "" {
-						parts = append(parts, thinking)
+					if thinking, ok := block["thinking"].(string); ok {
+						parts = appendVisibleTextFragment(parts, thinking)
 					}
 					continue
 				case "redacted_thinking":
@@ -403,10 +398,7 @@ func anthropicContentToText(content any) string {
 					}
 					continue
 				case "tool_result":
-					contentText := strings.TrimSpace(anthropicContentToText(block["content"]))
-					if contentText != "" {
-						parts = append(parts, contentText)
-					}
+					parts = appendVisibleTextFragment(parts, anthropicContentToText(block["content"]))
 					continue
 				case "tool_use":
 					if name, ok := block["name"].(string); ok && strings.TrimSpace(name) != "" {
@@ -418,12 +410,9 @@ func anthropicContentToText(content any) string {
 					continue
 				}
 			}
-			fallback := strings.TrimSpace(anthropicContentToText(item))
-			if fallback != "" {
-				parts = append(parts, fallback)
-			}
+			parts = appendVisibleTextFragment(parts, anthropicContentToText(item))
 		}
-		return strings.TrimSpace(strings.Join(parts, "\n"))
+		return strings.TrimSpace(strings.Join(parts, ""))
 	case map[string]any:
 		if blockType, _ := typed["type"].(string); strings.EqualFold(strings.TrimSpace(blockType), "redacted_thinking") {
 			if data := strings.TrimSpace(anthropicContentToText(typed["data"])); data != "" {

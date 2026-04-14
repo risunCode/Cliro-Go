@@ -1388,7 +1388,8 @@
 /* ========================================================================== */
 
 .accounts-sync-modal.sync-modal {
-  max-height: min(82vh, 44rem);
+  width: min(100%, 42rem);
+  max-height: min(calc(100dvh - 1.5rem), 44rem);
   display: flex;
   flex-direction: column;
 }
@@ -1448,6 +1449,7 @@
 }
 
 .accounts-sync-modal .sync-body {
+  min-height: 0;
   overflow-y: auto;
   display: grid;
   gap: 0.75rem;

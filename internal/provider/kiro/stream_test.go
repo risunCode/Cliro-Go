@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"hash/crc32"
 	"io"
+	"strings"
 	"testing"
 
 	contract "cliro/internal/contract"
@@ -130,6 +131,89 @@ func TestCollectCompletion_ParsesFallbackThinkingTagsSafely(t *testing.T) {
 	}
 	if outcome.ThinkingSignature == "" {
 		t.Fatalf("expected parsed thinking signature")
+	}
+}
+
+func TestCollectCompletion_PreservesWhitespaceAcrossStreamDeltas(t *testing.T) {
+	body := bytes.NewReader(bytes.Join([][]byte{
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can see"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can see you've"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can see you've shared"}),
+	}, nil))
+
+	outcome, err := collectCompletion(body, provider.ChatRequest{Model: "claude-sonnet-4.5"})
+	if err != nil {
+		t.Fatalf("collectCompletion: %v", err)
+	}
+	if outcome.Text != "can see you've shared" {
+		t.Fatalf("unexpected text: %q", outcome.Text)
+	}
+}
+
+func TestCollectCompletion_StripsEnvironmentDetailsFromStream(t *testing.T) {
+	body := bytes.NewReader(bytes.Join([][]byte{
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<environment"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<environment_details>\nCurrent time: 2026-04-14T23:38:26+07:00\n</environment"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<environment_details>\nCurrent time: 2026-04-14T23:38:26+07:00\n</environment_details>\n\nVisible answer"}),
+	}, nil))
+
+	outcome, err := collectCompletion(body, provider.ChatRequest{Model: "claude-sonnet-4.5"})
+	if err != nil {
+		t.Fatalf("collectCompletion: %v", err)
+	}
+	if outcome.Text != "Visible answer" {
+		t.Fatalf("unexpected text: %q", outcome.Text)
+	}
+}
+
+func TestCollectCompletionWithCallback_SanitizesVisibleChunks(t *testing.T) {
+	body := bytes.NewReader(bytes.Join([][]byte{
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai saya"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai saya kiroide"}),
+		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai saya kiroide<environment_details>\nCurrent time: 2026-04-15T00:02:14+07:00\n</environment_details> ada yang bisa dibantu"}),
+	}, nil))
+
+	var streamed strings.Builder
+	outcome, err := collectCompletionWithTagsAndMapping(body, provider.ChatRequest{Model: "claude-sonnet-4.5"}, nil, provider.ToolNameMapping{}, func(event StreamEvent) {
+		streamed.WriteString(event.Text)
+	})
+	if err != nil {
+		t.Fatalf("collectCompletionWithTagsAndMapping: %v", err)
+	}
+	if streamed.String() != "hai saya kiroide ada yang bisa dibantu" {
+		t.Fatalf("streamed text = %q", streamed.String())
+	}
+	if outcome.Text != "hai saya kiroide ada yang bisa dibantu" {
+		t.Fatalf("outcome text = %q", outcome.Text)
+	}
+}
+
+func TestSanitizeModelOutputDelta_PreservesLeadingWhitespace(t *testing.T) {
+	got := sanitizeModelOutputDelta(" ada yang bisa dibantu?")
+	if got != " ada yang bisa dibantu?" {
+		t.Fatalf("sanitizeModelOutputDelta = %q", got)
+	}
+}
+
+func TestStreamMetadataFilter_PreservesEmojiAcrossChunkBoundary(t *testing.T) {
+	filter := newStreamMetadataFilter()
+	first := filter.Feed("Halo juga! 🙂")
+	second := filter.Finalize()
+	if first+second != "Halo juga! 🙂" {
+		t.Fatalf("filtered text = %q", first+second)
+	}
+}
+
+func TestDeltaFromCumulative_PreservesEmojiOverlap(t *testing.T) {
+	previous := "Halo! 👋"
+	delta := deltaFromCumulative(&previous, "Halo! 👋😄")
+	if delta != "😄" {
+		t.Fatalf("delta = %q", delta)
+	}
+	if previous != "Halo! 👋😄" {
+		t.Fatalf("previous = %q", previous)
 	}
 }
 

@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.3] - 2026-04-14
+
+### Fixed
+
+- Fixed `collapseBlankLines` function in Kiro provider that was causing response text to merge without proper spacing between lines and paragraphs.
+- Added comprehensive test coverage for `collapseBlankLines` to ensure proper line spacing, blank line collapsing, and paragraph preservation.
+
+### Tests & Validation
+
+- Added 8 test cases for `collapseBlankLines` covering single line, multiple lines, blank line handling, and real-world response scenarios.
+- Validation passed for:
+  - `go test ./...`
+  - `npm run check`
+  - `wails build`
+
 ## [0.3.2] - 2026-04-14
 
 ### Changed
