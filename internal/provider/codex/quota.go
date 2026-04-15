@@ -1,7 +1,6 @@
 package codex
 
 import (
-	"cliro/internal/util"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	sharedauth "cliro/internal/auth/shared"
 	"cliro/internal/config"
 	provider "cliro/internal/provider"
 
@@ -280,8 +280,8 @@ func quotaBucketFromMap(name string, raw map[string]any) (config.QuotaBucket, bo
 	used := extractInt(raw, "used", "consumed", "current")
 	percent := extractInt(raw, "percent", "percentage")
 	resetAt := extractTime(raw, "reset_at", "resets_at", "next_reset_at")
-	status := strings.ToLower(util.FirstNonEmpty(extractString(raw, "status"), extractString(raw, "state")))
-	bucketName := util.FirstNonEmpty(name, extractString(raw, "name"), extractString(raw, "bucket"), extractString(raw, "kind"))
+	status := strings.ToLower(firstNonEmpty(extractString(raw, "status"), extractString(raw, "state")))
+	bucketName := firstNonEmpty(name, extractString(raw, "name"), extractString(raw, "bucket"), extractString(raw, "kind"))
 	if bucketName == "" {
 		bucketName = "quota"
 	}
@@ -390,7 +390,7 @@ func blockedAccountMessageFromError(err error) (string, bool) {
 	if err == nil {
 		return "", false
 	}
-	return config.BlockedAccountReason(err.Error())
+	return sharedauth.BlockedAccountReason(err.Error())
 }
 
 func isQuotaKey(key string) bool {

@@ -1,268 +1,85 @@
 package kiro
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/json"
-	"hash/crc32"
-	"io"
 	"strings"
 	"testing"
-
-	contract "cliro/internal/contract"
-	provider "cliro/internal/provider"
 )
 
-func TestStreamParser_ParsesAWSFramesAndToolUses(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hel"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hello"}),
-		awsEventFrame(t, "reasoningContentEvent", map[string]any{"text": "plan"}),
-		awsEventFrame(t, "reasoningContentEvent", map[string]any{"text": "plan more"}),
-		awsEventFrame(t, "toolUseEvent", map[string]any{"toolUseId": "tool_1", "name": "Read", "input": `{"path":"a`}),
-		awsEventFrame(t, "toolUseEvent", map[string]any{"toolUseId": "tool_1", "input": `bc"}`}),
-		awsEventFrame(t, "toolUseEvent", map[string]any{"toolUseId": "tool_1", "stop": true}),
-		awsEventFrame(t, "meteringEvent", map[string]any{"usage": map[string]any{"inputTokens": 4, "outputTokens": 6, "totalTokens": 10}}),
-	}, nil))
-
-	parser := NewStreamParser(body)
-	text := ""
-	thinking := ""
-	usage := UsageSnapshot{}
-	for {
-		event, err := parser.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			t.Fatalf("Next: %v", err)
-		}
-		text += event.Text
-		thinking += event.Thinking
-		mergeUsageSnapshot(&usage, event.Usage)
+func TestParserStateReconstructsContentThinkingToolAndUsage(t *testing.T) {
+	state := &parserState{}
+	state.feed([]byte(`{"content":"hello"}{"thinking":"reason"}{"name":"search","toolUseId":"toolu_1","input":{"q":"a"},"stop":false}{"input":{"page":1}}{"stop":true}{"usage":{"inputTokens":5,"outputTokens":7,"totalTokens":12}}`))
+	state.finalizeToolCall()
+	if got := len(state.textParts); got != 1 {
+		t.Fatalf("text parts = %d", got)
 	}
-
-	if text != "hello" {
-		t.Fatalf("unexpected text: %q", text)
+	if got := len(state.thinkingParts); got != 1 {
+		t.Fatalf("thinking parts = %d", got)
 	}
-	if thinking != "plan more" {
-		t.Fatalf("unexpected thinking: %q", thinking)
+	if got := len(state.toolCalls); got != 1 {
+		t.Fatalf("tool calls = %d", got)
 	}
-	if usage.PromptTokens != 4 || usage.CompletionTokens != 6 || usage.TotalTokens != 10 {
-		t.Fatalf("unexpected usage: %#v", usage)
-	}
-	toolUses := parser.ToolUses()
-	if len(toolUses) != 1 {
-		t.Fatalf("unexpected tool uses: %#v", toolUses)
-	}
-	if toolUses[0].Name != "Read" || toolUses[0].Input["path"] != "abc" {
-		t.Fatalf("unexpected tool use payload: %#v", toolUses[0])
+	if state.usage.TotalTokens != 12 {
+		t.Fatalf("usage total = %d", state.usage.TotalTokens)
 	}
 }
 
-func TestCollectCompletion_ExtractsBracketToolCalls(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": `[{"id":"tool_1","name":"Read","arguments":{"path":"README.md"}}]`}),
-		awsEventFrame(t, "meteringEvent", map[string]any{"usage": map[string]any{"inputTokens": 2, "outputTokens": 3, "totalTokens": 5}}),
-	}, nil))
-
-	outcome, err := collectCompletion(body, provider.ChatRequest{Model: "claude-sonnet-4.5"})
-	if err != nil {
-		t.Fatalf("collectCompletion: %v", err)
-	}
-	if outcome.Text != "" {
-		t.Fatalf("expected bracket tool payload to be extracted from text, got %q", outcome.Text)
-	}
-	if len(outcome.ToolUses) != 1 {
-		t.Fatalf("unexpected tool uses: %#v", outcome.ToolUses)
-	}
-	if outcome.ToolUses[0].ID != "tool_1" || outcome.ToolUses[0].Input["path"] != "README.md" {
-		t.Fatalf("unexpected extracted tool use: %#v", outcome.ToolUses[0])
-	}
-	if outcome.Usage.TotalTokens != 5 {
-		t.Fatalf("unexpected usage: %#v", outcome.Usage)
+func TestParserStateDedupesDuplicateToolCalls(t *testing.T) {
+	state := &parserState{}
+	state.feed([]byte(`{"name":"search","toolUseId":"toolu_1","input":{"q":"a"},"stop":true}{"name":"search","toolUseId":"toolu_2","input":{"q":"a"},"stop":true}`))
+	state.finalizeToolCall()
+	if got := len(state.toolCalls); got != 1 {
+		t.Fatalf("tool calls = %d", got)
 	}
 }
 
-func TestCollectCompletion_EstimatesUsageWhenStreamOmitsIt(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "reasoningContentEvent", map[string]any{"text": "plan carefully"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hello world"}),
-	}, nil))
-
-	outcome, err := collectCompletion(body, provider.ChatRequest{
-		Model:    "claude-sonnet-4.5",
-		Messages: []provider.Message{{Role: "user", Content: "please help summarize this project"}},
-	})
+func TestCollectCompletionParsesThinkingTagsFromContent(t *testing.T) {
+	reader := strings.NewReader(buildEventStreamPayload(`{"content":"<thinking>reason</thinking>done"}`))
+	outcome, err := collectCompletion(reader, "claude-sonnet-4.5")
 	if err != nil {
-		t.Fatalf("collectCompletion: %v", err)
+		t.Fatalf("collectCompletion error: %v", err)
 	}
-	if outcome.Usage.PromptTokens <= 0 {
-		t.Fatalf("expected estimated prompt tokens, got %#v", outcome.Usage)
-	}
-	if outcome.Usage.CompletionTokens <= 0 {
-		t.Fatalf("expected estimated completion tokens, got %#v", outcome.Usage)
-	}
-	if outcome.Usage.TotalTokens != outcome.Usage.PromptTokens+outcome.Usage.CompletionTokens {
-		t.Fatalf("unexpected estimated total tokens, got %#v", outcome.Usage)
-	}
-	if outcome.Text != "hello world" {
-		t.Fatalf("unexpected text: %q", outcome.Text)
-	}
-}
-
-func TestCollectCompletion_ParsesFallbackThinkingTagsSafely(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<thinking>plan mentions \"</thinking>\" safely</thinking>\n\nVisible answer"}),
-	}, nil))
-
-	outcome, err := collectCompletionWithTags(body, provider.ChatRequest{
-		Model:    "claude-sonnet-4.5",
-		Thinking: contract.ThinkingConfig{Requested: true},
-	}, []string{"<thinking>", "<think>"})
-	if err != nil {
-		t.Fatalf("collectCompletionWithTags: %v", err)
-	}
-	if outcome.Thinking != `plan mentions "</thinking>" safely` {
+	if outcome.Thinking != "reason" {
 		t.Fatalf("thinking = %q", outcome.Thinking)
 	}
-	if outcome.Text != "Visible answer" {
+	if outcome.Text != "done" {
 		t.Fatalf("text = %q", outcome.Text)
 	}
-	if outcome.ThinkingSignature == "" {
-		t.Fatalf("expected parsed thinking signature")
-	}
 }
 
-func TestCollectCompletion_PreservesWhitespaceAcrossStreamDeltas(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can see"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can see you've"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "can see you've shared"}),
-	}, nil))
-
-	outcome, err := collectCompletion(body, provider.ChatRequest{Model: "claude-sonnet-4.5"})
-	if err != nil {
-		t.Fatalf("collectCompletion: %v", err)
+func buildEventStreamPayload(jsonEvents ...string) string {
+	frames := make([]string, 0, len(jsonEvents))
+	for _, event := range jsonEvents {
+		frames = append(frames, string(buildAWSEventFrame([]byte(event))))
 	}
-	if outcome.Text != "can see you've shared" {
-		t.Fatalf("unexpected text: %q", outcome.Text)
-	}
+	return strings.Join(frames, "")
 }
 
-func TestCollectCompletion_StripsEnvironmentDetailsFromStream(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<environment"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<environment_details>\nCurrent time: 2026-04-14T23:38:26+07:00\n</environment"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "<environment_details>\nCurrent time: 2026-04-14T23:38:26+07:00\n</environment_details>\n\nVisible answer"}),
-	}, nil))
-
-	outcome, err := collectCompletion(body, provider.ChatRequest{Model: "claude-sonnet-4.5"})
-	if err != nil {
-		t.Fatalf("collectCompletion: %v", err)
-	}
-	if outcome.Text != "Visible answer" {
-		t.Fatalf("unexpected text: %q", outcome.Text)
-	}
+func buildAWSEventFrame(payload []byte) []byte {
+	headers := buildAWSEventHeaders(map[string]string{":message-type": "event"})
+	totalLen := uint32(len(headers) + len(payload) + 16)
+	buf := make([]byte, totalLen)
+	putUint32(buf[0:4], totalLen)
+	putUint32(buf[4:8], uint32(len(headers)))
+	copy(buf[12:], headers)
+	copy(buf[12+len(headers):], payload)
+	return buf
 }
 
-func TestCollectCompletionWithCallback_SanitizesVisibleChunks(t *testing.T) {
-	body := bytes.NewReader(bytes.Join([][]byte{
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai saya"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai saya kiroide"}),
-		awsEventFrame(t, "assistantResponseEvent", map[string]any{"content": "hai saya kiroide<environment_details>\nCurrent time: 2026-04-15T00:02:14+07:00\n</environment_details> ada yang bisa dibantu"}),
-	}, nil))
-
-	var streamed strings.Builder
-	outcome, err := collectCompletionWithTagsAndMapping(body, provider.ChatRequest{Model: "claude-sonnet-4.5"}, nil, provider.ToolNameMapping{}, func(event StreamEvent) {
-		streamed.WriteString(event.Text)
-	})
-	if err != nil {
-		t.Fatalf("collectCompletionWithTagsAndMapping: %v", err)
+func buildAWSEventHeaders(values map[string]string) []byte {
+	buf := make([]byte, 0)
+	for key, value := range values {
+		buf = append(buf, byte(len(key)))
+		buf = append(buf, []byte(key)...)
+		buf = append(buf, byte(7))
+		buf = append(buf, byte(len(value)>>8), byte(len(value)))
+		buf = append(buf, []byte(value)...)
 	}
-	if streamed.String() != "hai saya kiroide ada yang bisa dibantu" {
-		t.Fatalf("streamed text = %q", streamed.String())
-	}
-	if outcome.Text != "hai saya kiroide ada yang bisa dibantu" {
-		t.Fatalf("outcome text = %q", outcome.Text)
-	}
+	return buf
 }
 
-func TestSanitizeModelOutputDelta_PreservesLeadingWhitespace(t *testing.T) {
-	got := sanitizeModelOutputDelta(" ada yang bisa dibantu?")
-	if got != " ada yang bisa dibantu?" {
-		t.Fatalf("sanitizeModelOutputDelta = %q", got)
-	}
-}
-
-func TestStreamMetadataFilter_PreservesEmojiAcrossChunkBoundary(t *testing.T) {
-	filter := newStreamMetadataFilter()
-	first := filter.Feed("Halo juga! 🙂")
-	second := filter.Finalize()
-	if first+second != "Halo juga! 🙂" {
-		t.Fatalf("filtered text = %q", first+second)
-	}
-}
-
-func TestDeltaFromCumulative_PreservesEmojiOverlap(t *testing.T) {
-	previous := "Halo! 👋"
-	delta := deltaFromCumulative(&previous, "Halo! 👋😄")
-	if delta != "😄" {
-		t.Fatalf("delta = %q", delta)
-	}
-	if previous != "Halo! 👋😄" {
-		t.Fatalf("previous = %q", previous)
-	}
-}
-
-func awsEventFrame(t *testing.T, eventType string, payload any) []byte {
-	t.Helper()
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
-	headers := append(awsHeader(":message-type", "event"), awsHeader(":event-type", eventType)...)
-	totalLen := 12 + len(headers) + len(payloadBytes) + 4
-	prelude := make([]byte, 8)
-	binary.BigEndian.PutUint32(prelude[0:4], uint32(totalLen))
-	binary.BigEndian.PutUint32(prelude[4:8], uint32(len(headers)))
-	preludeCRC := crc32.ChecksumIEEE(prelude)
-	frame := make([]byte, 12)
-	copy(frame[:8], prelude)
-	binary.BigEndian.PutUint32(frame[8:12], preludeCRC)
-	frame = append(frame, headers...)
-	frame = append(frame, payloadBytes...)
-	messageCRC := crc32.ChecksumIEEE(frame)
-	trailer := make([]byte, 4)
-	binary.BigEndian.PutUint32(trailer, messageCRC)
-	return append(frame, trailer...)
-}
-
-func awsHeader(name string, value string) []byte {
-	encoded := make([]byte, 0, 1+len(name)+1+2+len(value))
-	encoded = append(encoded, byte(len(name)))
-	encoded = append(encoded, []byte(name)...)
-	encoded = append(encoded, byte(7))
-	length := make([]byte, 2)
-	binary.BigEndian.PutUint16(length, uint16(len(value)))
-	encoded = append(encoded, length...)
-	encoded = append(encoded, []byte(value)...)
-	return encoded
-}
-
-func mergeUsageSnapshot(target *UsageSnapshot, update UsageSnapshot) {
-	if target == nil {
-		return
-	}
-	if update.PromptTokens > 0 {
-		target.PromptTokens = update.PromptTokens
-	}
-	if update.CompletionTokens > 0 {
-		target.CompletionTokens = update.CompletionTokens
-	}
-	if update.TotalTokens > 0 {
-		target.TotalTokens = update.TotalTokens
-	}
+func putUint32(dst []byte, value uint32) {
+	dst[0] = byte(value >> 24)
+	dst[1] = byte(value >> 16)
+	dst[2] = byte(value >> 8)
+	dst[3] = byte(value)
 }

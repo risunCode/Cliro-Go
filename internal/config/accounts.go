@@ -151,13 +151,7 @@ func (m *Manager) MarkAccountReloginRequired(id string, message string) error {
 		a.CooldownUntil = now + int64((30*time.Second)/time.Second)
 		a.LastFailureAt = now
 		a.LastError = message
-		a.Quota = QuotaInfo{
-			Status:        "unknown",
-			Summary:       "Authentication required",
-			Source:        "runtime",
-			Error:         message,
-			LastCheckedAt: now,
-		}
+		a.Quota = QuotaInfo{Status: "unknown", Summary: "Authentication required", Source: "runtime", Error: message, LastCheckedAt: now}
 	})
 }
 
@@ -257,8 +251,18 @@ func isQuotaCooldownState(account Account, now int64) bool {
 	if account.HealthState == AccountHealthCooldownQuota {
 		return true
 	}
-	if strings.EqualFold(strings.TrimSpace(account.Quota.Status), "exhausted") && QuotaResetAt(account.Quota) > now {
+	if strings.EqualFold(strings.TrimSpace(account.Quota.Status), "exhausted") && localQuotaResetAt(account.Quota) > now {
 		return true
 	}
 	return false
+}
+
+func localQuotaResetAt(quota QuotaInfo) int64 {
+	var latest int64
+	for _, bucket := range quota.Buckets {
+		if bucket.ResetAt > latest {
+			latest = bucket.ResetAt
+		}
+	}
+	return latest
 }

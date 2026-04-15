@@ -241,7 +241,23 @@ func (m *Manager) refreshAccount(account config.Account, force bool) (config.Acc
 		}
 		return account, fmt.Errorf("%s only supports provider codex or kiro", verb)
 	}
-	return authProvider.RefreshAccount(account, force)
+	refreshed, err := authProvider.RefreshAccount(account, force)
+	if err != nil {
+		return refreshed, err
+	}
+	if !force {
+		return refreshed, nil
+	}
+	if quotaErr := m.refreshQuotaOnly(refreshed.ID); quotaErr != nil {
+		if updated, ok := m.store.GetAccount(refreshed.ID); ok {
+			return updated, quotaErr
+		}
+		return refreshed, quotaErr
+	}
+	if updated, ok := m.store.GetAccount(refreshed.ID); ok {
+		return updated, nil
+	}
+	return refreshed, nil
 }
 
 func (m *Manager) providerFor(name string) (authProvider, error) {

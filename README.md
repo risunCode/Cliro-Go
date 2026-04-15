@@ -2,7 +2,7 @@
 
 CLIRO is a Wails desktop control plane for running a local OpenAI-compatible proxy across ChatGPT Codex and Kiro accounts. CLIRO stands for CLIrouter.
 
-Current release: **v0.3.3**
+Current release: **v0.4.0**
 
 ## Screenshot
 
@@ -16,6 +16,11 @@ Current release: **v0.3.3**
 
 ## Highlights
 
+- **v0.4.0 architecture refresh**:
+  - proxy runtime restructured around `internal/proxy/codex`, `internal/proxy/anthropic`, `internal/proxy/models`, and `internal/proxy/shared`
+  - old `internal/contract`, `internal/gateway`, `internal/route`, and `internal/protocol/*` layers removed
+  - Codex runtime simplified into focused execution/payload/runtime files
+  - Kiro runtime promoted from partial path into a live routed provider with payload building, event-stream parsing, host fallback, and catalog support
 - OpenAI-compatible and Anthropic-compatible local proxy endpoints:
   - `POST /v1/responses`
   - `POST /v1/chat/completions`
@@ -49,10 +54,17 @@ Current release: **v0.3.3**
   - Example: `gpt-5.4-high`, `claude-sonnet-4.5-high`
 - Suffix is stripped during routing and converted to appropriate reasoning parameters
 - Current Kiro catalog includes examples such as:
+  - `auto`
+  - `claude-opus-4.5`
+  - `claude-opus-4.6`
   - `claude-sonnet-4`
   - `claude-sonnet-4.5`
+  - `claude-sonnet-4.6`
+  - `claude-haiku-4.5`
+  - `claude-haiku-4.6`
   - `minimax-m2.5`
   - `qwen3-coder-next`
+  - `deepseek-3.2`
 
 ## Local Data
 
@@ -136,6 +148,8 @@ The response will include `reasoning_content` field with extended thinking.
 - Authorization mode requires the configured API key for all proxy routes.
 - Cloudflared public access is managed from the API Router tab and depends on the local proxy being online.
 - Smart `Refresh All Quotas` skips accounts still waiting for quota reset; `Force Refresh All Quotas` checks every configured account.
+- Kiro runtime uses `q.us-east-1.amazonaws.com/generateAssistantResponse` first and falls back to `codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse` on runtime failure.
+- Reliability is now strongest on Codex/OpenAI paths; Kiro is live and routed, with the remaining risk concentrated around image handling, tool-result fidelity, and streaming edge cases.
 - Cross-protocol adapter audit and compatibility coverage are documented in `docs/audit-adapter-cross-protocol.md`.
 - Model aliasing behavior and examples are documented in `docs/feature-model-aliasing.md`.
 
@@ -146,4 +160,4 @@ The response will include `reasoning_content` field with extended thinking.
 
 ## Release Notes
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full `v0.3.1` change history.
+See [`CHANGELOG.md`](CHANGELOG.md) for the full release history.

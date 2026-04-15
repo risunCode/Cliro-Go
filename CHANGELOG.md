@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-04-15
+
+### Added
+
+- Added live Kiro provider execution path with routed proxy support across OpenAI-compatible and Anthropic-compatible requests.
+- Added Kiro runtime host fallback using `q.us-east-1.amazonaws.com/generateAssistantResponse` first and `codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse` as fallback.
+- Added canonical proxy content structures for text, images, tool results, and thinking blocks under `internal/proxy/models`.
+- Added focused validation scaffolding and live validation checklist for Kiro runtime parity under `.kiro/specs/kiro-runtime-parity/`.
+
+### Changed
+
+- Reworked backend proxy architecture around:
+  - `internal/proxy/codex/`
+  - `internal/proxy/anthropic/`
+  - `internal/proxy/models/`
+  - `internal/proxy/shared/`
+- Removed old proxy abstraction layers and consolidated ownership into protocol-facing proxy packages plus canonical proxy models.
+- Simplified Codex runtime package structure so execution, payload, and runtime helpers are split into clearer files.
+- Expanded Kiro model catalog and normalization support for Claude, Qwen, Minimax, DeepSeek, and `auto` routing.
+- Hardened OpenAI <-> Anthropic conversion paths around canonical content blocks, thinking, tool calls, tool results, and image payloads.
+- Hardened Kiro payload generation, stream parsing, fallback behavior, and provider failure handling.
+- Updated project and frontend versioning to `0.4.0`.
+
+### Fixed
+
+- Fixed multiple reliability issues caused by over-generic proxy layering and loose request/response ownership.
+- Fixed Kiro routing gaps where supported Claude-family and non-Claude Kiro models were not consistently recognized.
+- Fixed Kiro runtime execution behavior so host fallback and stream reconstruction no longer depend on a single upstream path.
+
+### Notes
+
+- Codex/OpenAI paths are now the most mature execution path in the app.
+- Kiro is live and routed, but remaining risk is concentrated in image handling, tool-result fidelity, and streaming edge cases.
+
 ## [0.3.3] - 2026-04-14
 
 ### Fixed

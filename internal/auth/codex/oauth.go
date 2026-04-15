@@ -1,7 +1,6 @@
 package codex
 
 import (
-	"cliro/internal/util"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -272,7 +271,7 @@ func (s *Service) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if callbackErr != "" {
-		message := util.FirstNonEmpty(callbackErrDesc, callbackErr)
+		message := firstNonEmpty(callbackErrDesc, callbackErr)
 		s.finishAuthError(state, fmt.Errorf(message))
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = io.WriteString(w, RenderCallbackPage("Authentication failed", message))

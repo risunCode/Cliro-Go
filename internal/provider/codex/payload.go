@@ -1,23 +1,22 @@
 package codex
 
 import (
-	"cliro/internal/util"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"cliro/internal/provider"
+	models "cliro/internal/proxy/models"
 
 	"github.com/google/uuid"
 )
 
-func (s *Service) buildRequestPayload(req provider.ChatRequest) (map[string]any, error) {
+func (s *Service) buildRequestPayload(req ChatRequest) (map[string]any, error) {
 	payload, _, err := s.buildRequestPayloadWithToolNames(req)
 	return payload, err
 }
 
-func (s *Service) buildRequestPayloadWithToolNames(req provider.ChatRequest) (map[string]any, provider.ToolNameMapping, error) {
-	mapping := provider.BuildToolNameMapping(req.Tools, req.Messages, provider.DefaultToolNameLimit)
+func (s *Service) buildRequestPayloadWithToolNames(req ChatRequest) (map[string]any, ToolNameMapping, error) {
+	mapping := BuildToolNameMapping(req.Tools, req.Messages, DefaultToolNameLimit)
 	input := make([]any, 0, len(req.Messages))
 	for _, msg := range req.Messages {
 		items := s.codexMessageItems(msg, mapping)
@@ -76,7 +75,7 @@ func (s *Service) buildRequestPayloadWithToolNames(req provider.ChatRequest) (ma
 	return payload, mapping, nil
 }
 
-func (s *Service) codexMessageItems(msg provider.Message, mapping provider.ToolNameMapping) []any {
+func (s *Service) codexMessageItems(msg Message, mapping ToolNameMapping) []any {
 	role := strings.ToLower(strings.TrimSpace(msg.Role))
 	switch role {
 	case "system", "developer":
@@ -99,7 +98,7 @@ func (s *Service) codexMessageItems(msg provider.Message, mapping provider.ToolN
 			if arguments == "" {
 				arguments = "{}"
 			}
-			items = append(items, map[string]any{"type": "function_call", "call_id": util.FirstNonEmpty(toolCall.ID, "toolu_"+uuid.NewString()[:8]), "name": name, "arguments": arguments})
+			items = append(items, map[string]any{"type": "function_call", "call_id": firstNonEmpty(toolCall.ID, "toolu_"+uuid.NewString()[:8]), "name": name, "arguments": arguments})
 		}
 		return items
 	case "tool":
@@ -117,14 +116,14 @@ func (s *Service) codexMessageItems(msg provider.Message, mapping provider.ToolN
 	}
 }
 
-func (s *Service) codexTools(tools []provider.Tool, mapping provider.ToolNameMapping) []any {
+func (s *Service) codexTools(tools []Tool, mapping ToolNameMapping) []any {
 	converted := make([]any, 0, len(tools))
 	for _, tool := range tools {
 		name := mapping.Remap(tool.Function.Name)
 		if name == "" {
 			continue
 		}
-		schema, _ := provider.NormalizeToolSchema(tool.Function.Parameters).(map[string]any)
+		schema, _ := NormalizeToolSchema(tool.Function.Parameters).(map[string]any)
 		converted = append(converted, map[string]any{
 			"type":        "function",
 			"name":        name,
@@ -172,6 +171,9 @@ func repairToolSchema(schema map[string]any) map[string]any {
 }
 
 func messageToText(content any) string {
+	if text := models.ContentText(content); strings.TrimSpace(text) != "" {
+		return text
+	}
 	switch typed := content.(type) {
 	case nil:
 		return ""

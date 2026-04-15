@@ -308,9 +308,8 @@ export namespace logger {
 	    timestamp: number;
 	    level: string;
 	    scope: string;
-	    event?: string;
+	    event: string;
 	    requestId?: string;
-	    message: string;
 	    fields?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
@@ -324,7 +323,6 @@ export namespace logger {
 	        this.scope = source["scope"];
 	        this.event = source["event"];
 	        this.requestId = source["requestId"];
-	        this.message = source["message"];
 	        this.fields = source["fields"];
 	    }
 	}

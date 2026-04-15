@@ -43,25 +43,10 @@ func normalizeCloudflaredSettings(settings CloudflaredSettings) CloudflaredSetti
 	return normalized
 }
 
-func normalizeThinkingMode(mode ThinkingMode) ThinkingMode {
-	switch ThinkingMode(strings.TrimSpace(string(mode))) {
-	case ThinkingModeOff:
-		return ThinkingModeOff
-	case ThinkingModeForce:
-		return ThinkingModeForce
-	default:
-		return ThinkingModeAuto
-	}
-}
-
 func defaultThinkingSettings() ThinkingSettings {
 	return ThinkingSettings{
-		Suffix:                    defaultThinkingSuffix,
-		Mode:                      ThinkingModeAuto,
-		FallbackTags:              []string{"<thinking>", "<think>"},
-		RequireAnthropicSignature: true,
-		ForceForAnthropic:         false,
-		MaxForcedThinkingTokens:   defaultMaxForcedThinkingTokens,
+		Suffix:       defaultThinkingSuffix,
+		FallbackTags: []string{"<thinking>", "<think>"},
 	}
 }
 
@@ -70,13 +55,7 @@ func normalizeThinkingSettings(settings ThinkingSettings) ThinkingSettings {
 	if suffix := strings.TrimSpace(settings.Suffix); suffix != "" {
 		normalized.Suffix = suffix
 	}
-	normalized.Mode = normalizeThinkingMode(settings.Mode)
 	normalized.FallbackTags = normalizeThinkingFallbackTags(settings.FallbackTags)
-	normalized.RequireAnthropicSignature = settings.RequireAnthropicSignature
-	normalized.ForceForAnthropic = settings.ForceForAnthropic
-	if settings.MaxForcedThinkingTokens > 0 {
-		normalized.MaxForcedThinkingTokens = settings.MaxForcedThinkingTokens
-	}
 	return normalized
 }
 

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"cliro/internal/provider"
-	"cliro/internal/util"
 
 	"github.com/google/uuid"
 )
@@ -177,7 +176,7 @@ func (s *Service) pollDeviceToken(ctx context.Context, clientID, clientSecret, d
 			AccessToken:  strings.TrimSpace(parsed.AccessToken),
 			RefreshToken: strings.TrimSpace(parsed.RefreshToken),
 			ExpiresIn:    parsed.ExpiresIn,
-			TokenType:    util.FirstNonEmpty(strings.TrimSpace(parsed.TokenType), "Bearer"),
+			TokenType:    firstNonEmpty(strings.TrimSpace(parsed.TokenType), "Bearer"),
 			ProfileARN:   strings.TrimSpace(parsed.ProfileARN),
 			ClientID:     strings.TrimSpace(clientID),
 			ClientSecret: strings.TrimSpace(clientSecret),
@@ -186,8 +185,8 @@ func (s *Service) pollDeviceToken(ctx context.Context, clientID, clientSecret, d
 		if strings.TrimSpace(token.ProfileARN) == "" {
 			profileARN, profileEmail, profileErr := s.fetchProfile(ctx, token.AccessToken)
 			if profileErr == nil {
-				token.ProfileARN = util.FirstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
-				token.Email = util.FirstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
+				token.ProfileARN = firstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
+				token.Email = firstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
 			}
 		}
 		if strings.TrimSpace(token.Email) == "" {
@@ -244,9 +243,9 @@ func (s *Service) refreshTokens(ctx context.Context, clientID, clientSecret, ref
 
 	token := &TokenData{
 		AccessToken:  strings.TrimSpace(parsed.AccessToken),
-		RefreshToken: util.FirstNonEmpty(strings.TrimSpace(parsed.RefreshToken), strings.TrimSpace(refreshToken)),
+		RefreshToken: firstNonEmpty(strings.TrimSpace(parsed.RefreshToken), strings.TrimSpace(refreshToken)),
 		ExpiresIn:    parsed.ExpiresIn,
-		TokenType:    util.FirstNonEmpty(strings.TrimSpace(parsed.TokenType), "Bearer"),
+		TokenType:    firstNonEmpty(strings.TrimSpace(parsed.TokenType), "Bearer"),
 		ProfileARN:   strings.TrimSpace(parsed.ProfileARN),
 		Email:        ExtractEmailFromJWT(parsed.AccessToken),
 		ClientID:     strings.TrimSpace(clientID),
@@ -258,8 +257,8 @@ func (s *Service) refreshTokens(ctx context.Context, clientID, clientSecret, ref
 	if strings.TrimSpace(token.ProfileARN) == "" {
 		profileARN, profileEmail, profileErr := s.fetchProfile(ctx, token.AccessToken)
 		if profileErr == nil {
-			token.ProfileARN = util.FirstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
-			token.Email = util.FirstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
+			token.ProfileARN = firstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
+			token.Email = firstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
 		}
 	}
 	if strings.TrimSpace(token.Email) == "" {

@@ -1,12 +1,12 @@
 package provider
 
 import (
-	"cliro/internal/util"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
+	sharedauth "cliro/internal/auth/shared"
 	"cliro/internal/config"
 )
 
@@ -55,10 +55,10 @@ func ClassifyHTTPFailure(status int, message string) FailureDecision {
 		trimmedMessage = http.StatusText(status)
 	}
 
-	if blockedMessage, blocked := config.BlockedAccountReason(trimmedMessage); blocked {
+	if blockedMessage, blocked := sharedauth.BlockedAccountReason(trimmedMessage); blocked {
 		return FailureDecision{Class: FailureDurableDisabled, Message: blockedMessage, BanAccount: true, Disable: true, Status: http.StatusUnauthorized}
 	}
-	if refreshableMessage, refreshable := config.RefreshableAuthReason(trimmedMessage); refreshable && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
+	if refreshableMessage, refreshable := sharedauth.RefreshableAuthReason(trimmedMessage); refreshable && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
 		return FailureDecision{Class: FailureAuthRefreshable, Message: refreshableMessage, RetryAllowed: true, Status: http.StatusUnauthorized}
 	}
 
@@ -106,7 +106,7 @@ func SynthesizeQuota(account config.Account, err error) config.QuotaInfo {
 	}
 	if account.CooldownUntil > now {
 		info.Status = "exhausted"
-		info.Summary = util.FirstNonEmpty(strings.TrimSpace(account.LastError), "Quota cooldown is active.")
+		info.Summary = firstNonEmpty(strings.TrimSpace(account.LastError), "Quota cooldown is active.")
 		info.Buckets = []config.QuotaBucket{{
 			Name:    "session",
 			ResetAt: account.CooldownUntil,
@@ -190,6 +190,16 @@ func CompactHTTPBody(body []byte) string {
 		return trimmed[:180] + "..."
 	}
 	return trimmed
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func parseCompactHTTPJSON(raw string) string {

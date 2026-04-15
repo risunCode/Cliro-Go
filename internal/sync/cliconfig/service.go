@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"cliro/internal/logger"
-	"cliro/internal/route"
+	"cliro/internal/proxy/models"
 )
 
 type Service struct {
@@ -33,7 +33,7 @@ func NewService(log *logger.Logger) *Service {
 }
 
 func (s *Service) ModelCatalog() []CatalogModel {
-	catalog := route.CatalogModels()
+	catalog := models.CatalogModels()
 	out := make([]CatalogModel, 0, len(catalog))
 	for _, model := range catalog {
 		out = append(out, CatalogModel{ID: model.ID, OwnedBy: model.OwnedBy})

@@ -1,7 +1,6 @@
 package kiro
 
 import (
-	"cliro/internal/util"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,9 @@ import (
 )
 
 const (
-	kiroQuotaBaseURL = "https://codewhisperer.us-east-1.amazonaws.com"
+	kiroQuotaBaseURL        = "https://codewhisperer.us-east-1.amazonaws.com"
+	kiroRuntimeUserAgent    = "aws-sdk-js/1.2.15 ua/2.1 os/linux lang/js md/nodejs#22.21.1 api/codewhispererstreaming#1.2.15 m/E KiroIDE-0.11.107"
+	kiroRuntimeAmzUserAgent = "aws-sdk-js/1.2.15 KiroIDE 0.11.107"
 )
 
 type QuotaFetcher struct {
@@ -116,7 +117,7 @@ func (f *QuotaFetcher) FetchQuota(ctx context.Context, account config.Account, r
 		if status == "" {
 			status = "healthy"
 		}
-		summary := util.FirstNonEmpty(
+		summary := firstNonEmpty(
 			strings.TrimSpace(payload.SubscriptionInfo.SubscriptionTitle),
 			strings.TrimSpace(payload.SubscriptionInfo.SubscriptionName),
 		)
@@ -191,7 +192,7 @@ func (f *QuotaFetcher) fetchUserEmail(ctx context.Context, account config.Accoun
 			return "", err
 		}
 
-		resolved := strings.TrimSpace(util.FirstNonEmpty(payload.Email, payload.UserInfo.Email))
+		resolved := strings.TrimSpace(firstNonEmpty(payload.Email, payload.UserInfo.Email))
 		if resolved == "" {
 			return "", fmt.Errorf("kiro user info response missing email")
 		}
@@ -252,6 +253,13 @@ func resolveKiroBucketName(item usageBreakdownEntry) string {
 	}
 
 	return "credits"
+}
+
+func maxInt(left int, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func normalizeKiroBucketName(raw string) string {

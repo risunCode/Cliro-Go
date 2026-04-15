@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	accountstate "cliro/internal/account"
 	"cliro/internal/config"
 	"cliro/internal/logger"
 )
@@ -193,8 +194,8 @@ func (r *refreshLoop) refreshAccount(ctx context.Context, acc config.Account) {
 
 	select {
 	case <-rctx.Done():
-		r.log.WarnEvent("auth", "codex.autorefresh.timeout",
-			logger.String("account", config.AccountLabel(acc)))
+		r.log.Warn("auth", "codex.autorefresh.timeout",
+			logger.F("account", accountstate.Label(acc)))
 		return
 	case <-ctx.Done():
 		return
@@ -202,12 +203,12 @@ func (r *refreshLoop) refreshAccount(ctx context.Context, acc config.Account) {
 	}
 
 	if refreshErr != nil {
-		r.log.WarnEvent("auth", "codex.autorefresh.failed",
-			logger.String("account", config.AccountLabel(acc)),
-			logger.String("error", refreshErr.Error()))
+		r.log.Warn("auth", "codex.autorefresh.failed",
+			logger.F("account", accountstate.Label(acc)),
+			logger.F("error", refreshErr.Error()))
 		return
 	}
 
-	r.log.InfoEvent("auth", "codex.autorefresh.ok",
-		logger.String("account", config.AccountLabel(acc)))
+	r.log.Info("auth", "codex.autorefresh.ok",
+		logger.F("account", accountstate.Label(acc)))
 }

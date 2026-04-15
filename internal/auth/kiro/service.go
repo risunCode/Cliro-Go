@@ -2,7 +2,6 @@ package kiro
 
 import (
 	"cliro/internal/auth/shared"
-	"cliro/internal/util"
 	"context"
 	"fmt"
 	"net/http"
@@ -76,7 +75,7 @@ func (s *Service) StartAuth() (*AuthStart, error) {
 		return nil, err
 	}
 
-	authURL := util.FirstNonEmpty(device.VerificationURIComplete, device.VerificationURI)
+	authURL := firstNonEmpty(device.VerificationURIComplete, device.VerificationURI)
 	if strings.TrimSpace(authURL) == "" {
 		return nil, fmt.Errorf("kiro device authorization did not return a verification URL")
 	}
@@ -293,8 +292,8 @@ func (s *Service) RefreshAccount(account config.Account, force bool) (config.Acc
 		if strings.TrimSpace(tokens.RefreshToken) != "" {
 			a.RefreshToken = tokens.RefreshToken
 		}
-		a.ClientID = util.FirstNonEmpty(strings.TrimSpace(tokens.ClientID), strings.TrimSpace(a.ClientID))
-		a.ClientSecret = util.FirstNonEmpty(strings.TrimSpace(tokens.ClientSecret), strings.TrimSpace(a.ClientSecret))
+		a.ClientID = firstNonEmpty(strings.TrimSpace(tokens.ClientID), strings.TrimSpace(a.ClientID))
+		a.ClientSecret = firstNonEmpty(strings.TrimSpace(tokens.ClientSecret), strings.TrimSpace(a.ClientSecret))
 		if strings.TrimSpace(tokens.ProfileARN) != "" {
 			a.AccountID = strings.TrimSpace(tokens.ProfileARN)
 		}
@@ -553,7 +552,7 @@ func (s *Service) finishAuthSuccess(sessionID string, account config.Account) {
 		session.cancel()
 		session.cancel = nil
 	}
-	s.log.Info("auth", "Kiro auth completed for "+util.FirstNonEmpty(account.Email, account.ID))
+	s.log.Info("auth", "Kiro auth completed for "+firstNonEmpty(account.Email, account.ID))
 }
 
 func (s *Service) finishAuthError(sessionID string, err error) {

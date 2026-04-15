@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"cliro/internal/provider"
-	"cliro/internal/util"
 )
 
 const socialCallbackPort = 9876
@@ -130,8 +129,8 @@ func (s *Service) exchangeSocialCode(ctx context.Context, code string, codeVerif
 	if strings.TrimSpace(token.ProfileARN) == "" {
 		profileARN, profileEmail, profileErr := s.fetchProfile(ctx, token.AccessToken)
 		if profileErr == nil {
-			token.ProfileARN = util.FirstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
-			token.Email = util.FirstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
+			token.ProfileARN = firstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
+			token.Email = firstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
 		}
 	}
 	if strings.TrimSpace(token.Email) == "" {
@@ -190,7 +189,7 @@ func (s *Service) refreshSocialToken(ctx context.Context, refreshToken string) (
 
 	token := &TokenData{
 		AccessToken:  strings.TrimSpace(parsed.AccessToken),
-		RefreshToken: util.FirstNonEmpty(strings.TrimSpace(parsed.RefreshToken), trimmedRefreshToken),
+		RefreshToken: firstNonEmpty(strings.TrimSpace(parsed.RefreshToken), trimmedRefreshToken),
 		ExpiresIn:    parsed.ExpiresIn,
 		TokenType:    "Bearer",
 		ProfileARN:   strings.TrimSpace(parsed.ProfileARN),
@@ -202,8 +201,8 @@ func (s *Service) refreshSocialToken(ctx context.Context, refreshToken string) (
 	if strings.TrimSpace(token.ProfileARN) == "" {
 		profileARN, profileEmail, profileErr := s.fetchProfile(ctx, token.AccessToken)
 		if profileErr == nil {
-			token.ProfileARN = util.FirstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
-			token.Email = util.FirstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
+			token.ProfileARN = firstNonEmpty(strings.TrimSpace(token.ProfileARN), strings.TrimSpace(profileARN))
+			token.Email = firstNonEmpty(strings.TrimSpace(token.Email), strings.TrimSpace(profileEmail))
 		}
 	}
 	if strings.TrimSpace(token.Email) == "" {

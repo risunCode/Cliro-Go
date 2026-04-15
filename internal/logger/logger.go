@@ -68,12 +68,8 @@ func (l *Logger) AttachContext(ctx context.Context) {
 	l.ctx = ctx
 }
 
-func (l *Logger) append(level, scope, message string) {
-	l.appendEntry(newEntry(level, scope, message))
-}
-
-func (l *Logger) appendEvent(level, scope, event string, fields ...Field) {
-	l.appendEntry(newEventEntry(level, scope, event, fields...))
+func (l *Logger) append(level, scope, event string, fields ...Field) {
+	l.appendEntry(newEntry(level, scope, event, fields...))
 }
 
 func (l *Logger) appendEntry(entry Entry) {
@@ -114,22 +110,17 @@ func (l *Logger) trimEntriesLocked() {
 	l.entries = append([]Entry(nil), l.entries[len(l.entries)-l.max:]...)
 }
 
-func (l *Logger) Debug(scope, message string) { l.append("DEBUG", scope, message) }
-func (l *Logger) Info(scope, message string)  { l.append("INFO", scope, message) }
-func (l *Logger) Warn(scope, message string)  { l.append("WARN", scope, message) }
-func (l *Logger) Error(scope, message string) { l.append("ERROR", scope, message) }
-
-func (l *Logger) DebugEvent(scope, event string, fields ...Field) {
-	l.appendEvent("DEBUG", scope, event, fields...)
+func (l *Logger) Debug(scope, event string, fields ...Field) {
+	l.append("DEBUG", scope, event, fields...)
 }
-func (l *Logger) InfoEvent(scope, event string, fields ...Field) {
-	l.appendEvent("INFO", scope, event, fields...)
+func (l *Logger) Info(scope, event string, fields ...Field) {
+	l.append("INFO", scope, event, fields...)
 }
-func (l *Logger) WarnEvent(scope, event string, fields ...Field) {
-	l.appendEvent("WARN", scope, event, fields...)
+func (l *Logger) Warn(scope, event string, fields ...Field) {
+	l.append("WARN", scope, event, fields...)
 }
-func (l *Logger) ErrorEvent(scope, event string, fields ...Field) {
-	l.appendEvent("ERROR", scope, event, fields...)
+func (l *Logger) Error(scope, event string, fields ...Field) {
+	l.append("ERROR", scope, event, fields...)
 }
 
 func (l *Logger) Entries(limit int) []Entry {

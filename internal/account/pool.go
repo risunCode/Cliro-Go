@@ -152,20 +152,20 @@ func (p *Pool) ProviderUnavailableReason(provider string) string {
 	return fmt.Sprintf("no available %s accounts (ready=%d cooldown_quota=%d cooldown_transient=%d durable_disabled=%d banned=%d)", targetProvider, snapshot.ReadyCount, snapshot.CooldownQuotaCount, snapshot.CooldownTransientCount, snapshot.DisabledDurableCount, snapshot.BannedCount)
 }
 
-func accountAvailabilityState(account config.Account, now int64) config.AccountHealthState {
-	if account.Banned || account.HealthState == config.AccountHealthBanned {
+func accountAvailabilityState(acc config.Account, now int64) config.AccountHealthState {
+	if acc.Banned || acc.HealthState == config.AccountHealthBanned {
 		return config.AccountHealthBanned
 	}
-	if !account.Enabled || account.HealthState == config.AccountHealthDisabledDurable {
+	if !acc.Enabled || acc.HealthState == config.AccountHealthDisabledDurable {
 		return config.AccountHealthDisabledDurable
 	}
-	if account.CooldownUntil > now {
-		if account.HealthState == config.AccountHealthCooldownQuota {
+	if acc.CooldownUntil > now {
+		if acc.HealthState == config.AccountHealthCooldownQuota {
 			return config.AccountHealthCooldownQuota
 		}
 		return config.AccountHealthCooldownTransient
 	}
-	if config.QuotaResetAt(account.Quota) > now && account.Quota.Status == "exhausted" {
+	if QuotaResetAt(acc.Quota) > now && acc.Quota.Status == "exhausted" {
 		return config.AccountHealthCooldownQuota
 	}
 	return config.AccountHealthReady

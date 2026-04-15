@@ -22,19 +22,6 @@ type Storage struct {
 	statsPath    string
 }
 
-// AppSettings contains general application settings
-type AppSettings struct {
-	ProxyPort         int                 `json:"proxyPort"`
-	AllowLAN          bool                `json:"allowLan"`
-	AutoStartProxy    bool                `json:"autoStartProxy"`
-	ProxyAPIKey       string              `json:"proxyApiKey,omitempty"`
-	AuthorizationMode bool                `json:"authorizationMode,omitempty"`
-	SchedulingMode    string              `json:"schedulingMode,omitempty"`
-	Cloudflared       CloudflaredSettings `json:"cloudflared,omitempty"`
-	Thinking          ThinkingSettings    `json:"thinking,omitempty"`
-	ModelAliases      map[string]string   `json:"modelAliases,omitempty"`
-}
-
 // NewStorage creates a new multi-file storage manager
 func NewStorage(dataDir string) (*Storage, error) {
 	s := &Storage{

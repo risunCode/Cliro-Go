@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(grep -n \"^func \" internal/logger/*.go)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)",
+      "Bash(wails build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(wc -l \"D:\\\\MyGitRepository\\\\TownProject\\\\CLIRO\\\\z_references\\\\kiro-gateway\\\\kiro\"/*.py)",
+      "Bash(go mod:*)",
+      "Bash(go get:*)",
+      "Bash(xargs wc:*)",
+      "Bash(timeout 5 ./kiro-gateway.exe)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /F /PID 22820)",
+      "Bash(taskkill /F /PID 14004)",
+      "Bash(curl:*)",
+      "Bash(find . -name \"*.py\" -type f -exec grep -l \"generateAssistantResponse\\\\|conversationState\" {} \\\\;)",
+      "Bash(taskkill:*)",
+      "Bash(findstr :9002)",
+      "Bash(./kiro-gateway.exe)",
+      "Bash(./test_curl.sh *)"
+    ]
+  }
+}

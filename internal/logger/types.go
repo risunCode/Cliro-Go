@@ -12,9 +12,8 @@ type Entry struct {
 	Timestamp int64          `json:"timestamp"`
 	Level     string         `json:"level"`
 	Scope     string         `json:"scope"`
-	Event     string         `json:"event,omitempty"`
+	Event     string         `json:"event"`
 	RequestID string         `json:"requestId,omitempty"`
-	Message   string         `json:"message"`
 	Fields    map[string]any `json:"fields,omitempty"`
 }
 
@@ -37,11 +36,7 @@ const (
 	levelError = 40
 )
 
-func String(key string, value string) Field { return Field{Key: key, Value: value} }
-func Int(key string, value int) Field       { return Field{Key: key, Value: value} }
-func Int64(key string, value int64) Field   { return Field{Key: key, Value: value} }
-func Bool(key string, value bool) Field     { return Field{Key: key, Value: value} }
-func Any(key string, value any) Field       { return Field{Key: key, Value: value} }
+func F(key string, value any) Field { return Field{Key: key, Value: value} }
 
 func Err(err error) Field {
 	if err == nil {
@@ -84,16 +79,7 @@ func normalizeScope(scope string) string {
 	return trimmed
 }
 
-func newEntry(level, scope, message string) Entry {
-	return Entry{
-		Timestamp: time.Now().UnixMilli(),
-		Level:     normalizeLevel(level),
-		Scope:     normalizeScope(scope),
-		Message:   redactMessage(message),
-	}
-}
-
-func newEventEntry(level, scope, event string, fields ...Field) Entry {
+func newEntry(level, scope, event string, fields ...Field) Entry {
 	entryFields, requestID := buildEntryFields(fields)
 	return Entry{
 		Timestamp: time.Now().UnixMilli(),
@@ -101,7 +87,6 @@ func newEventEntry(level, scope, event string, fields ...Field) Entry {
 		Scope:     normalizeScope(scope),
 		Event:     strings.TrimSpace(event),
 		RequestID: requestID,
-		Message:   formatEventMessage(event, fields),
 		Fields:    entryFields,
 	}
 }
@@ -134,46 +119,12 @@ func buildEntryFields(fields []Field) (map[string]any, string) {
 	return entryFields, requestID
 }
 
-func formatEventMessage(event string, fields []Field) string {
-	parts := make([]string, 0, 1+len(fields))
-	trimmedEvent := strings.TrimSpace(event)
-	if trimmedEvent != "" {
-		parts = append(parts, "event="+quoteValue(trimmedEvent))
-	}
-	for _, field := range fields {
-		key := normalizeFieldKey(field.Key)
-		if key == "" {
-			continue
-		}
-		value := redactFieldValue(key, field.Value)
-		parts = append(parts, key+"="+formatFieldValueForMessage(value))
-	}
-	return strings.Join(parts, " ")
-}
-
 func normalizeFieldKey(key string) string {
 	return strings.TrimSpace(key)
 }
 
 func isRequestIDKey(key string) bool {
 	return strings.EqualFold(strings.TrimSpace(key), "request_id") || strings.EqualFold(strings.TrimSpace(key), "requestId")
-}
-
-func quoteValue(value string) string {
-	return strconv.Quote(strings.TrimSpace(value))
-}
-
-func formatFieldValueForMessage(value any) string {
-	switch typed := value.(type) {
-	case nil:
-		return quoteValue("")
-	case string:
-		return quoteValue(typed)
-	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		return fieldStringValue(typed)
-	default:
-		return fieldStringValue(typed)
-	}
 }
 
 func fieldStringValue(value any) string {
@@ -224,7 +175,7 @@ func fieldStringValue(value any) string {
 func marshalEntryLine(entry Entry) string {
 	encoded, err := json.Marshal(entry)
 	if err != nil {
-		fallback := fmt.Sprintf(`{"timestamp":%d,"level":%q,"scope":%q,"message":%q}`, entry.Timestamp, entry.Level, entry.Scope, entry.Message)
+		fallback := fmt.Sprintf(`{"timestamp":%d,"level":%q,"scope":%q,"event":%q}`, entry.Timestamp, entry.Level, entry.Scope, entry.Event)
 		return fallback + "\n"
 	}
 	return string(encoded) + "\n"
@@ -246,7 +197,7 @@ func parsePersistedLine(line string) (Entry, bool) {
 func normalizePersistedEntry(entry Entry) Entry {
 	entry.Level = normalizeLevel(entry.Level)
 	entry.Scope = normalizeScope(entry.Scope)
-	entry.Message = redactMessage(entry.Message)
+	entry.Event = strings.TrimSpace(entry.Event)
 	entry.RequestID = strings.TrimSpace(entry.RequestID)
 	if len(entry.Fields) > 0 {
 		normalized := make(map[string]any, len(entry.Fields))

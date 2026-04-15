@@ -13,13 +13,13 @@ func HandleRefreshFailure(store *config.Manager, log *logger.Logger, account *co
 	if store == nil || log == nil || account == nil || err == nil {
 		return
 	}
-	if blockedMsg, blocked := config.BlockedAccountReason(err.Error()); blocked {
+	if blockedMsg, blocked := BlockedAccountReason(err.Error()); blocked {
 		if markErr := store.MarkAccountBanned(account.ID, blockedMsg); markErr != nil {
 			log.Warn("auth", "failed to mark account banned: "+markErr.Error())
 		}
 		return
 	}
-	if reloginMessage, refreshable := config.RefreshableAuthReason(err.Error()); refreshable {
+	if reloginMessage, refreshable := RefreshableAuthReason(err.Error()); refreshable {
 		if markErr := store.MarkAccountReloginRequired(account.ID, reloginMessage); markErr != nil {
 			log.Warn("auth", "failed to mark account relogin required: "+markErr.Error())
 		}

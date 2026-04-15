@@ -9,7 +9,7 @@ This guide gives AI coding agents the current project scope, architecture, and w
 - **Backend**: Go 1.23+
 - **Frontend**: Svelte + TypeScript + Vite
 - **Desktop shell**: Wails v2.11+
-- **Current release**: **v0.3.3**
+- **Current release**: **v0.4.0**
 - **Main entry point**: `main.go`
 - **Wails app bridge**: `app.go`
 
@@ -35,7 +35,7 @@ CLIRO currently focuses on:
   - OpenAI `reasoning.effort` ↔ Anthropic `thinking.budget_tokens` bidirectional mapping
   - Automatic parameter filtering to prevent "Unknown parameter" errors
   - Response format: `reasoning_content` field in OpenAI endpoints, thinking blocks in Anthropic endpoints
-- Kiro runtime endpoints remain fixed to `q.us-east-1.amazonaws.com` and `codewhisperer.us-east-1.amazonaws.com`.
+- Kiro runtime uses `q.us-east-1.amazonaws.com/generateAssistantResponse` first and falls back to `codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse` on runtime failure.
 - Authorization mode (when enabled) requires the configured proxy API key on all proxy routes.
 - Smart quota refresh skips accounts that are disabled/banned/not-yet-reset exhausted; force refresh bypasses smart skip.
 - One-click CLI config sync targets in API Router:
@@ -50,7 +50,7 @@ CLIRO mimics official client user agents to ensure compatibility with upstream p
 
 ### Codex Provider (OpenAI)
 
-**Implementation**: `internal/platform/useragent.go`
+**Implementation**: hardcoded in `internal/provider/codex/service.go`
 
 **Current Version**: `codex-tui/0.118.0`
 
@@ -102,7 +102,7 @@ CLIRO mimics official client user agents to ensure compatibility with upstream p
 
 When updating user agent versions:
 
-1. **Codex TUI**: Update `codexTUIVersion` constant in `internal/platform/useragent.go`
+1. **Codex TUI**: Update Codex version/user-agent constants in `internal/provider/codex/service.go`
 2. **Kiro IDE**: Update version strings in:
    - `internal/provider/kiro/service.go` (runtime constants)
    - `internal/auth/kiro/types.go` (auth constants)
@@ -348,30 +348,45 @@ Key frontend files:
 
 ### Backend Core Modules
 
-- **Gateway**: `internal/gateway/`
-  - OpenAI + Anthropic endpoint handlers
-  - Provider routing + retry + availability diagnostics
-- **Routing & Model Resolution**: `internal/route/`
-  - Provider resolution, model catalogs, alias-aware selection
+- **Proxy Shell**: `internal/proxy/http/`
+  - server lifecycle, mux wiring, common request context, shared route shell
+- **OpenAI/Codex Proxy Face**: `internal/proxy/codex/`
+  - OpenAI-style request/response DTOs
+  - OpenAI-style request normalization and response encoding
+  - OpenAI-style streaming helpers and route-specific execution helpers
+- **Anthropic Proxy Face**: `internal/proxy/anthropic/`
+  - Anthropic request/response DTOs
+  - Anthropic request normalization and response encoding
+  - Anthropic streaming helpers and route-specific execution helpers
+- **Canonical Proxy Model**: `internal/proxy/models/`
+  - shared typed request/response/content/tool/image/thinking model
+  - validation rules, tool arg remapping, model/provider resolution, model catalog exposure
+- **Proxy Shared Helpers**: `internal/proxy/shared/`
+  - small response/error helpers shared by protocol-facing proxy packages
 - **Auth**: `internal/auth/`
   - Codex OAuth flow + Kiro auth flows
 - **Provider Services**: `internal/provider/`
-  - Codex and Kiro request execution
-  - Quota service orchestration (`internal/provider/quota/service.go`)
-  - Thinking parsing/arbitration under `internal/provider/thinking/`
+  - root package keeps shared health/failure classification only
+  - `internal/provider/codex/` owns Codex runtime execution
+  - `internal/provider/kiro/` owns Kiro runtime payload building, runtime fallback, stream parsing, and quota fetch
 - **Config Storage**: `internal/config/`
-  - Snapshot + atomic updates over JSON files
+  - snapshot + atomic updates over JSON files
 - **Structured Logging**: `internal/logger/`
-  - In-memory + persistent JSONL log storage
-  - Structured entries with `level`, `scope`, `event`, `requestId`, `message`, and `fields`
+  - in-memory + persistent JSONL log storage
+  - structured entries with `level`, `scope`, `event`, `requestId`, `message`, and `fields`
 - **Sync Services**: `internal/sync/`
   - `internal/sync/cliconfig/` for one-click CLI config patch/read/write
   - `internal/sync/authtoken/` for account auth token sync into supported CLIs
 - **Cloudflared**: `internal/cloudflared/manager.go`
-  - Install, start/stop tunnel, parse URL/status
-- **Contracts & Protocol Codecs**:
-  - `internal/contract/` holds protocol-neutral request/response types and validation rules
-  - `internal/protocol/openai/` and `internal/protocol/anthropic/` hold protocol types plus decode/encode pipelines
+  - install, start/stop tunnel, parse URL/status
+
+### Backend Notes
+
+- `internal/contract/`, `internal/gateway/`, `internal/route/`, and `internal/protocol/*` are gone. Do not recreate them.
+- Shared request/response ownership now lives in `internal/proxy/models/`.
+- Protocol-specific behavior belongs in `internal/proxy/codex/` or `internal/proxy/anthropic/`, not in generic proxy glue.
+- Provider-specific runtime behavior belongs in `internal/provider/codex/` or `internal/provider/kiro/`.
+- Kiro path is live and usable, but edge-case hardening is still most likely needed around images, tool-result fidelity, and streaming parity.
 
 ## One-Click CLI Sync Details
 
@@ -530,9 +545,9 @@ Default base URL: `http://localhost:8095`
 
 ### Add a New Proxy Capability
 
-1. Update protocol decode/encode logic in `internal/protocol/openai/` and/or `internal/protocol/anthropic/` if protocol mapping is needed.
-2. Update gateway handlers in `internal/gateway/`.
-3. Update route validation and model resolution in `internal/route/`.
+1. Update protocol-facing codec logic in `internal/proxy/codex/` and/or `internal/proxy/anthropic/` if protocol mapping is needed.
+2. Update route shell wiring in `internal/proxy/http/` if a new endpoint or handler path is needed.
+3. Update validation and model resolution in `internal/proxy/models/`.
 4. Add tests for both OpenAI and Anthropic request paths.
 
 ### Add/Change CLI Sync Target
@@ -546,6 +561,7 @@ Default base URL: `http://localhost:8095`
 
 - `go test . ./internal/...` passes.
 - `cd frontend && npm run check` passes.
+- Proxy reliability is currently strongest on Codex/OpenAI paths. Kiro is live and routed, but agents should expect the remaining risk to concentrate in image handling, tool-result fidelity, and stream edge cases.
 - Manually verify API Router flows if router state/config behavior changed:
   - proxy start/stop
   - model alias save/apply
